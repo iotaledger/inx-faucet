@@ -14,6 +14,7 @@ import (
 	"github.com/iotaledger/hive.go/logger"
 	inx "github.com/iotaledger/inx/go"
 	iotago "github.com/iotaledger/iota.go/v3"
+	"github.com/iotaledger/iota.go/v3/nodeclient"
 )
 
 type NodeBridge struct {
@@ -31,6 +32,7 @@ type NodeBridge struct {
 type Events struct {
 	MessageSolid              *events.Event
 	ConfirmedMilestoneChanged *events.Event
+	LedgerUpdated             *events.Event
 }
 
 func INXMessageMetadataCaller(handler interface{}, params ...interface{}) {
@@ -38,7 +40,11 @@ func INXMessageMetadataCaller(handler interface{}, params ...interface{}) {
 }
 
 func INXMilestoneCaller(handler interface{}, params ...interface{}) {
-	handler.(func(metadata *inx.Milestone))(params[0].(*inx.Milestone))
+	handler.(func(milestone *inx.Milestone))(params[0].(*inx.Milestone))
+}
+
+func INXLedgerUpdateCaller(handler interface{}, params ...interface{}) {
+	handler.(func(update *inx.LedgerUpdate))(params[0].(*inx.LedgerUpdate))
 }
 
 func NewNodeBridge(ctx context.Context, client inx.INXClient, logger *logger.Logger) (*NodeBridge, error) {
@@ -66,13 +72,14 @@ func NewNodeBridge(ctx context.Context, client inx.INXClient, logger *logger.Log
 		Events: &Events{
 			MessageSolid:              events.NewEvent(INXMessageMetadataCaller),
 			ConfirmedMilestoneChanged: events.NewEvent(INXMilestoneCaller),
+			LedgerUpdated:             events.NewEvent(INXLedgerUpdateCaller),
 		},
 		latestMilestone:    nodeStatus.GetLatestMilestone(),
 		confirmedMilestone: nodeStatus.GetConfirmedMilestone(),
 	}, nil
 }
 
-func (n *NodeBridge) DeserializationParameters() *iotago.DeSerializationParameters {
+func (n *NodeBridge) DeSerializationParameters() *iotago.DeSerializationParameters {
 	return &iotago.DeSerializationParameters{
 		RentStructure: &iotago.RentStructure{
 			VByteCost:    n.ProtocolParameters.RentStructure.GetVByteCost(),
@@ -92,6 +99,7 @@ func (n *NodeBridge) Run(ctx context.Context) {
 	go n.listenToConfirmedMilestone(c, cancel)
 	go n.listenToLatestMilestone(c, cancel)
 	go n.listenToSolidMessages(c, cancel)
+	go n.listenToLedgerUpdates(c, cancel)
 	<-c.Done()
 }
 
@@ -106,19 +114,27 @@ func (n *NodeBridge) IsNodeSynced() bool {
 	return n.latestMilestone.GetMilestoneIndex() == n.confirmedMilestone.GetMilestoneIndex()
 }
 
-func (n *NodeBridge) EmitMessage(ctx context.Context, message *iotago.Message) error {
+func (n *NodeBridge) EmitMessage(ctx context.Context, message *iotago.Message) (iotago.MessageID, error) {
 
 	msg, err := inx.WrapMessage(message)
 	if err != nil {
-		return err
+		return iotago.MessageID{}, err
 	}
 
-	_, err = n.Client.SubmitMessage(ctx, msg)
+	response, err := n.Client.SubmitMessage(ctx, msg)
 	if err != nil {
-		return err
+		return iotago.MessageID{}, err
 	}
 
-	return nil
+	return response.Unwrap(), nil
+}
+
+func (n *NodeBridge) INXNodeClient() *nodeclient.Client {
+	return inx.NewNodeclientOverINX(n.Client)
+}
+
+func (n *NodeBridge) MessageMetadata(ctx context.Context, messageID iotago.MessageID) (*inx.MessageMetadata, error) {
+	return n.Client.ReadMessageMetadata(ctx, inx.NewMessageId(messageID))
 }
 
 func (n *NodeBridge) listenToSolidMessages(ctx context.Context, cancel context.CancelFunc) error {
@@ -191,6 +207,29 @@ func (n *NodeBridge) listenToConfirmedMilestone(ctx context.Context, cancel cont
 	return nil
 }
 
+func (n *NodeBridge) listenToLedgerUpdates(ctx context.Context, cancel context.CancelFunc) error {
+	defer cancel()
+	stream, err := n.Client.ListenToLedgerUpdates(ctx, &inx.LedgerRequest{})
+	if err != nil {
+		return err
+	}
+	for {
+		update, err := stream.Recv()
+		if err != nil {
+			if err == io.EOF || status.Code(err) == codes.Canceled {
+				break
+			}
+			n.Logger.Errorf("listenToLedgerUpdates: %s", err.Error())
+			break
+		}
+		if ctx.Err() != nil {
+			break
+		}
+		n.processLedgerUpdate(update)
+	}
+	return nil
+}
+
 func (n *NodeBridge) processSolidMessage(metadata *inx.MessageMetadata) {
 	n.TangleListener.processSolidMessage(metadata)
 	n.Events.MessageSolid.Trigger(metadata)
@@ -209,4 +248,8 @@ func (n *NodeBridge) processConfirmedMilestone(ms *inx.Milestone) {
 
 	n.TangleListener.processConfirmedMilestone(ms)
 	n.Events.ConfirmedMilestoneChanged.Trigger(ms)
+}
+
+func (n *NodeBridge) processLedgerUpdate(update *inx.LedgerUpdate) {
+	n.Events.LedgerUpdated.Trigger(update)
 }

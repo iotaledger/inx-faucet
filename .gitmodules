@@ -1,0 +1,3 @@
+[submodule "plugins/faucet/frontend"]
+	path = plugins/faucet/frontend
+	url = https://github.com/iotaledger/chrysalis-faucet.git

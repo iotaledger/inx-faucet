@@ -5,6 +5,7 @@ import (
 	"github.com/gohornet/hornet/pkg/node"
 	"github.com/gohornet/inx-faucet/core/app"
 	"github.com/gohornet/inx-faucet/core/inx"
+	"github.com/gohornet/inx-faucet/plugins/faucet"
 )
 
 func main() {
@@ -14,6 +15,8 @@ func main() {
 			inx.CorePlugin,
 			gracefulshutdown.CorePlugin,
 		}...),
-		node.WithPlugins([]*node.Plugin{}...),
+		node.WithPlugins([]*node.Plugin{
+			faucet.Plugin,
+		}...),
 	)
 }
