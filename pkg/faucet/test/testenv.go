@@ -212,7 +212,9 @@ func NewFaucetTestEnv(t *testing.T,
 			return iotago.MessageID{}, fmt.Errorf("msg has invalid protocol version %d instead of %d", message.ProtocolVersion, iotago.ProtocolVersion)
 		}
 
-		message.Parents = iotago.MessageIDs{te.LastMilestoneMessageID().ToArray()}
+		if len(message.Parents) == 0 {
+			message.Parents = iotago.MessageIDs{te.LastMilestoneMessageID().ToArray()}
+		}
 
 		err := te.PoWHandler.DoPoW(ctx, message, 1)
 		if err != nil {
