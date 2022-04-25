@@ -153,7 +153,7 @@ func provide(c *dig.Container) {
 
 			return faucetOutputs, nil
 		}
-		
+
 		return faucet.New(
 			Plugin.Daemon(),
 			fetchMetadata,

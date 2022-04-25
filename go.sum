@@ -315,8 +315,8 @@ github.com/gogo/protobuf v1.3.1/go.mod h1:SlYgWuQ5SjCEi6WLHjHCa1yvBfUnHcTbrrZtXP
 github.com/gogo/protobuf v1.3.2 h1:Ov1cvc58UF3b5XjBnZv7+opcTcQFZebYjWzi34vdm4Q=
 github.com/gogo/protobuf v1.3.2/go.mod h1:P1XiOD3dCwIKUDQYPy72D8LYyHL2YPYrpS2s69NZV8Q=
 github.com/gogo/status v1.1.0/go.mod h1:BFv9nrluPLmrS0EmGVvLaPNmRosr9KapBYd5/hpY1WM=
-github.com/gohornet/hornet v1.1.0-rc1.0.20220425134024-9ff5bb152f4e h1:wX9NSz1TT8Tby3v9hFMd+NJVLtrl1soUApGZeWay9lM=
-github.com/gohornet/hornet v1.1.0-rc1.0.20220425134024-9ff5bb152f4e/go.mod h1:HOn1r4kmiPoyHYWu+LiiOtS+hhdUqYXO7ALsaWWUb0I=
+github.com/gohornet/hornet v1.1.0-rc1.0.20220425142420-248fcda75052 h1:XgiL0Fzai1R/evWp8s0fOaXDNR+o8DJ//pp8gBBTJEA=
+github.com/gohornet/hornet v1.1.0-rc1.0.20220425142420-248fcda75052/go.mod h1:HOn1r4kmiPoyHYWu+LiiOtS+hhdUqYXO7ALsaWWUb0I=
 github.com/golang-jwt/jwt v3.2.2+incompatible h1:IfV12K8xAKAnZqdXVzCZ+TOjboZ2keLg81eXfW3O+oY=
 github.com/golang-jwt/jwt v3.2.2+incompatible/go.mod h1:8pz2t5EyA70fFQQSrl6XZXzqecmYZeUEB8OUGHkxJ+I=
 github.com/golang-jwt/jwt/v4 v4.3.0/go.mod h1:/xlHOz8bRuivTWchD4jCa+NbatV+wEUSzwAxVc6locg=

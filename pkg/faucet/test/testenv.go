@@ -173,11 +173,19 @@ func NewFaucetTestEnv(t *testing.T,
 	defaultDaemon.Start()
 
 	fetchMetadataFunc := func(ctx context.Context, messageID iotago.MessageID) (*faucet.Metadata, error) {
-		metadata := te.Storage().CachedMessageMetadataOrNil(hornet.MessageIDFromArray(messageID)) // metadata +1
+		metadata := te.Storage().CachedMessageMetadataOrNil(hornet.MessageIDFromArray(messageID)) // meta +1
 		if metadata == nil {
 			return nil, nil
 		}
-		metadata.Release(true) // metadata -1
+		metadata.Release(true) // meta -1
+
+		if metadata.Metadata().IsReferenced() {
+			return &faucet.Metadata{
+				IsReferenced:   metadata.Metadata().IsReferenced(),
+				IsConflicting:  metadata.Metadata().IsConflictingTx(),
+				ShouldReattach: false,
+			}, nil
+		}
 
 		cmi := te.SyncManager().ConfirmedMilestoneIndex()
 		_, ocri, err := dag.ConeRootIndexes(ctx, te.Storage(), metadata.Retain(), cmi) // meta pass +1
@@ -186,8 +194,8 @@ func NewFaucetTestEnv(t *testing.T,
 		}
 
 		return &faucet.Metadata{
-			IsReferenced:   metadata.Metadata().IsReferenced(),
-			IsConflicting:  metadata.Metadata().IsConflictingTx(),
+			IsReferenced:   false,
+			IsConflicting:  false,
 			ShouldReattach: (cmi - ocri) > milestone.Index(BelowMaxDepth),
 		}, nil
 	}

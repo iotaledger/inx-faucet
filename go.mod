@@ -4,7 +4,7 @@ go 1.18
 
 require (
 	github.com/gobuffalo/packr/v2 v2.8.3
-	github.com/gohornet/hornet v1.1.0-rc1.0.20220425134024-9ff5bb152f4e
+	github.com/gohornet/hornet v1.1.0-rc1.0.20220425142420-248fcda75052
 	github.com/grpc-ecosystem/go-grpc-middleware v1.3.0
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0
 	github.com/iotaledger/hive.go v0.0.0-20220422070230-888c697ffcb8
