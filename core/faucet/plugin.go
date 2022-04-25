@@ -195,25 +195,22 @@ func run() {
 		CorePlugin.LogPanicf("failed to start worker: %s", err)
 	}
 
-	websiteEnabled := deps.AppConfig.Bool(CfgFaucetWebsiteEnabled)
+	bindAddr := deps.AppConfig.String(CfgFaucetBindAddress)
 
-	if websiteEnabled {
-		bindAddr := deps.AppConfig.String(CfgFaucetWebsiteBindAddress)
+	e := echo.New()
+	e.HideBanner = true
+	e.Use(middleware.Recover())
 
-		e := echo.New()
-		e.HideBanner = true
-		e.Use(middleware.Recover())
+	setupRoutes(e)
 
-		setupRoutes(e)
+	go func() {
+		CorePlugin.LogInfof("You can now access the faucet website using: http://%s", bindAddr)
 
-		go func() {
-			CorePlugin.LogInfof("You can now access the faucet website using: http://%s", bindAddr)
+		if err := e.Start(bindAddr); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			CorePlugin.LogWarnf("Stopped faucet website server due to an error (%s)", err)
+		}
+	}()
 
-			if err := e.Start(bindAddr); err != nil && !errors.Is(err, http.ErrServerClosed) {
-				CorePlugin.LogWarnf("Stopped faucet website server due to an error (%s)", err)
-			}
-		}()
-	}
 }
 
 func configureEvents() {
