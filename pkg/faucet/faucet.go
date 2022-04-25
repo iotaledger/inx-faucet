@@ -27,6 +27,9 @@ type IsNodeSyncedFunc = func() bool
 // SendMessageFunc is a function which sends a message to the network.
 type SendMessageFunc = func(ctx context.Context, msg *iotago.Message) (iotago.MessageID, error)
 
+// TipselFunc selects tips for the faucet.
+type TipselFunc = func(ctx context.Context) (tips iotago.MessageIDs, err error)
+
 // Metadata contains the basic message metadata required by the faucet.
 type Metadata struct {
 	IsReferenced   bool
@@ -118,6 +121,8 @@ type Faucet struct {
 	address iotago.Address
 	// used to sign the faucet transactions.
 	addressSigner iotago.AddressSigner
+	// used to get valid tips for new faucet messages.
+	tipselFunc TipselFunc
 	// the function used to send a message.
 	sendMessageFunc SendMessageFunc
 	// holds the faucet options.
@@ -282,6 +287,7 @@ func New(
 	deSeriParas *iotago.DeSerializationParameters,
 	address iotago.Address,
 	addressSigner iotago.AddressSigner,
+	tipselFunc TipselFunc,
 	sendMessageFunc SendMessageFunc,
 	opts ...Option) *Faucet {
 
@@ -298,6 +304,7 @@ func New(
 		deSeriParas:         deSeriParas,
 		address:             address,
 		addressSigner:       addressSigner,
+		tipselFunc:          tipselFunc,
 		sendMessageFunc:     sendMessageFunc,
 		opts:                options,
 
@@ -475,20 +482,21 @@ func (f *Faucet) clearPendingTransactionWithoutLocking(msgID iotago.MessageID) {
 // createMessage creates a new message and references the last faucet message.
 func (f *Faucet) createMessage(txPayload iotago.Payload, tip ...iotago.MessageID) (*iotago.Message, error) {
 
-	tips := iotago.MessageIDs{}
+	tips, err := f.tipselFunc(f.runloopCtx)
+	if err != nil {
+		return nil, err
+	}
+
 	if len(tip) > 0 {
 		// if a tip was passed, use that one
-		tips = append(tips, tip[0])
+		if len(tips) < iotago.MaxParentsInAMessage {
+			tips = append(tips, tip[0])
+		} else {
+			tips[0] = tip[0]
+		}
 	}
 
-	// create the message
-	iotaMsg := &iotago.Message{
-		ProtocolVersion: iotago.ProtocolVersion,
-		Parents:         tips,
-		Payload:         txPayload,
-	}
-
-	return iotaMsg, nil
+	return builder.NewMessageBuilder().ParentsMessageIDs(tips).Payload(txPayload).Build()
 }
 
 // buildTransactionPayload creates a signed transaction payload with all UTXO and batched requests.
@@ -781,8 +789,6 @@ func (f *Faucet) RunFaucetLoop(ctx context.Context, initDoneCallback func()) err
 			}
 
 			processRequests := func() ([]UTXOOutput, []*queueItem, iotago.MessageIDs, error) {
-				// first we need to read lock the ledger, to be sure that there is no confirmation ongoing
-
 				// there must be a lock between collectUnspentOutputsWithoutLocking and "tipselection", otherwise the chaining may fail
 				f.Lock()
 				defer f.Unlock()
