@@ -24,7 +24,7 @@ var (
 const (
 
 	// RouteFaucetInfo is the route to give info about the faucet address.
-	// GET returns address and balance of the faucet.
+	// GET returns address, balance, bech32HRP and tokenName of the faucet.
 	RouteFaucetInfo = "/info"
 
 	// RouteFaucetEnqueue is the route to tell the faucet to pay out some funds to the given address.

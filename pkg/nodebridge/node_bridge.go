@@ -219,7 +219,7 @@ func (n *NodeBridge) listenToLedgerUpdates(ctx context.Context, cancel context.C
 			if err == io.EOF || status.Code(err) == codes.Canceled {
 				break
 			}
-			n.Logger.Errorf("listenToLedgerUpdates: %s", err.Error())
+			n.Logger.Warnf("listenToLedgerUpdates: %s", err.Error())
 			break
 		}
 		if ctx.Err() != nil {

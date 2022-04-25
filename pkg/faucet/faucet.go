@@ -690,12 +690,12 @@ CollectValues:
 func (f *Faucet) processRequestsWithoutLocking(collectedRequestsCounter int, amount uint64, batchedRequests []*queueItem) []*queueItem {
 	processedBatchedRequests := []*queueItem{}
 	unprocessedBatchedRequests := []*queueItem{}
-	nodeAlmostSynced := f.nodeSyncedFunc() //TODO: check if we need an almost synced here or not
+	nodeSynced := f.nodeSyncedFunc()
 
 	for i := range batchedRequests {
 		request := batchedRequests[i]
 
-		if !nodeAlmostSynced {
+		if !nodeSynced {
 			// request can't be processed because the node is not synchronized => re-add it to the queue
 			unprocessedBatchedRequests = append(unprocessedBatchedRequests, request)
 			continue
