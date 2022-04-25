@@ -17,6 +17,7 @@ import (
 	"github.com/gohornet/hornet/pkg/node"
 	"github.com/gohornet/hornet/pkg/shutdown"
 	"github.com/gohornet/hornet/pkg/utils"
+	"github.com/gohornet/inx-faucet/pkg/daemon"
 	"github.com/gohornet/inx-faucet/pkg/faucet"
 	"github.com/gohornet/inx-faucet/pkg/nodebridge"
 	"github.com/iotaledger/hive.go/configuration"
@@ -191,7 +192,7 @@ func run() {
 			deps.ShutdownHandler.SelfShutdown(fmt.Sprintf("faucet plugin hit a critical error: %s", err.Error()))
 		}
 		detachEvents()
-	}, shutdown.PriorityFaucet); err != nil {
+	}, daemon.PriorityStopFaucet); err != nil {
 		Plugin.LogPanicf("failed to start worker: %s", err)
 	}
 
