@@ -79,6 +79,10 @@ type FaucetInfoResponse struct {
 	Address string `json:"address"`
 	// The remaining balance of faucet.
 	Balance uint64 `json:"balance"`
+	// The name of the token of the faucet.
+	TokenName string `json:"tokenName"`
+	// The Bech32 human readable part of the the faucet.
+	Bech32HRP iotago.NetworkPrefix `json:"bech32HRP"`
 }
 
 // FaucetEnqueueResponse defines the response of a POST RouteFaucetEnqueue REST API call.
@@ -142,6 +146,7 @@ type Faucet struct {
 // the default options applied to the faucet.
 var defaultOptions = []Option{
 	WithHRPNetworkPrefix(iotago.PrefixTestnet),
+	WithTokenName("TestToken"),
 	WithAmount(10000000),            // 10 Mi
 	WithSmallAmount(1000000),        // 1 Mi
 	WithMaxAddressBalance(20000000), // 20 Mi
@@ -156,6 +161,7 @@ type Options struct {
 	// the logger used to log events.
 	logger            *logger.Logger
 	hrpNetworkPrefix  iotago.NetworkPrefix
+	tokenName         string
 	amount            uint64
 	smallAmount       uint64
 	maxAddressBalance uint64
@@ -183,6 +189,13 @@ func WithLogger(logger *logger.Logger) Option {
 func WithHRPNetworkPrefix(networkPrefix iotago.NetworkPrefix) Option {
 	return func(opts *Options) {
 		opts.hrpNetworkPrefix = networkPrefix
+	}
+}
+
+// WithTokenName sets the name of the token.
+func WithTokenName(name string) Option {
+	return func(opts *Options) {
+		opts.tokenName = name
 	}
 }
 
@@ -317,8 +330,10 @@ func (f *Faucet) NetworkPrefix() iotago.NetworkPrefix {
 // Info returns the used faucet address and remaining balance.
 func (f *Faucet) Info() (*FaucetInfoResponse, error) {
 	return &FaucetInfoResponse{
-		Address: f.address.Bech32(f.opts.hrpNetworkPrefix),
-		Balance: f.faucetBalance,
+		Address:   f.address.Bech32(f.opts.hrpNetworkPrefix),
+		Balance:   f.faucetBalance,
+		TokenName: f.opts.tokenName,
+		Bech32HRP: f.opts.hrpNetworkPrefix,
 	}, nil
 }
 

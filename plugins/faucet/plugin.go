@@ -165,6 +165,7 @@ func provide(c *dig.Container) {
 			deps.NodeBridge.EmitMessage,
 			faucet.WithLogger(Plugin.Logger()),
 			faucet.WithHRPNetworkPrefix(bech32Prefix),
+			faucet.WithTokenName("IOTA"), //TODO: get name from future protocol params
 			faucet.WithAmount(uint64(deps.AppConfig.Int64(CfgFaucetAmount))),
 			faucet.WithSmallAmount(uint64(deps.AppConfig.Int64(CfgFaucetSmallAmount))),
 			faucet.WithMaxAddressBalance(uint64(deps.AppConfig.Int64(CfgFaucetMaxAddressBalance))),
