@@ -28,8 +28,7 @@ import (
 )
 
 func init() {
-	Plugin = &node.Plugin{
-		Status: node.StatusEnabled,
+	CorePlugin = &node.CorePlugin{
 		Pluggable: node.Pluggable{
 			Name:      "Faucet",
 			DepsFunc:  func(cDeps dependencies) { deps = cDeps },
@@ -42,8 +41,8 @@ func init() {
 }
 
 var (
-	Plugin *node.Plugin
-	deps   dependencies
+	CorePlugin *node.CorePlugin
+	deps       dependencies
 
 	// closures
 	onLedgerUpdated *events.Closure
@@ -61,20 +60,20 @@ func provide(c *dig.Container) {
 
 	privateKeys, err := utils.LoadEd25519PrivateKeysFromEnvironment("FAUCET_PRV_KEY")
 	if err != nil {
-		Plugin.LogPanicf("loading faucet private key failed, err: %s", err)
+		CorePlugin.LogPanicf("loading faucet private key failed, err: %s", err)
 	}
 
 	if len(privateKeys) == 0 {
-		Plugin.LogPanic("loading faucet private key failed, err: no private keys given")
+		CorePlugin.LogPanic("loading faucet private key failed, err: no private keys given")
 	}
 
 	if len(privateKeys) > 1 {
-		Plugin.LogPanic("loading faucet private key failed, err: too many private keys given")
+		CorePlugin.LogPanic("loading faucet private key failed, err: too many private keys given")
 	}
 
 	privateKey := privateKeys[0]
 	if len(privateKey) != ed25519.PrivateKeySize {
-		Plugin.LogPanic("loading faucet private key failed, err: wrong private key length")
+		CorePlugin.LogPanic("loading faucet private key failed, err: wrong private key length")
 	}
 
 	faucetAddress := iotago.Ed25519AddressFromPubKey(privateKey.Public().(ed25519.PublicKey))
@@ -155,7 +154,7 @@ func provide(c *dig.Container) {
 		}
 
 		return faucet.New(
-			Plugin.Daemon(),
+			CorePlugin.Daemon(),
 			fetchMetadata,
 			collectOutputs,
 			deps.NodeBridge.IsNodeSynced,
@@ -164,7 +163,7 @@ func provide(c *dig.Container) {
 			&faucetAddress,
 			faucetSigner,
 			deps.NodeBridge.EmitMessage,
-			faucet.WithLogger(Plugin.Logger()),
+			faucet.WithLogger(CorePlugin.Logger()),
 			faucet.WithHRPNetworkPrefix(bech32Prefix),
 			faucet.WithTokenName("IOTA"), //TODO: get name from future protocol params
 			faucet.WithAmount(uint64(deps.AppConfig.Int64(CfgFaucetAmount))),
@@ -176,7 +175,7 @@ func provide(c *dig.Container) {
 			faucet.WithPowWorkerCount(deps.AppConfig.Int(CfgFaucetPoWWorkerCount)),
 		)
 	}); err != nil {
-		Plugin.LogPanic(err)
+		CorePlugin.LogPanic(err)
 	}
 }
 
@@ -186,14 +185,14 @@ func configure() {
 
 func run() {
 	// create a background worker that handles the enqueued faucet requests
-	if err := Plugin.Daemon().BackgroundWorker("Faucet", func(ctx context.Context) {
+	if err := CorePlugin.Daemon().BackgroundWorker("Faucet", func(ctx context.Context) {
 		attachEvents()
 		if err := deps.Faucet.RunFaucetLoop(ctx, nil); err != nil && common.IsCriticalError(err) != nil {
 			deps.ShutdownHandler.SelfShutdown(fmt.Sprintf("faucet plugin hit a critical error: %s", err.Error()))
 		}
 		detachEvents()
 	}, daemon.PriorityStopFaucet); err != nil {
-		Plugin.LogPanicf("failed to start worker: %s", err)
+		CorePlugin.LogPanicf("failed to start worker: %s", err)
 	}
 
 	websiteEnabled := deps.AppConfig.Bool(CfgFaucetWebsiteEnabled)
@@ -208,10 +207,10 @@ func run() {
 		setupRoutes(e)
 
 		go func() {
-			Plugin.LogInfof("You can now access the faucet website using: http://%s", bindAddr)
+			CorePlugin.LogInfof("You can now access the faucet website using: http://%s", bindAddr)
 
 			if err := e.Start(bindAddr); err != nil && !errors.Is(err, http.ErrServerClosed) {
-				Plugin.LogWarnf("Stopped faucet website server due to an error (%s)", err)
+				CorePlugin.LogWarnf("Stopped faucet website server due to an error (%s)", err)
 			}
 		}()
 	}
