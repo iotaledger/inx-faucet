@@ -207,11 +207,6 @@ func NewFaucetTestEnv(t *testing.T,
 		return faucetOutputs, nil
 	}
 
-	tipselFunc := func(_ context.Context) (tips iotago.MessageIDs, err error) {
-		// issue all faucet messages on the latest milestone
-		return iotago.MessageIDs{te.LastMilestoneMessageID().ToArray()}, nil
-	}
-
 	storeMessageFunc := func(ctx context.Context, message *iotago.Message) (iotago.MessageID, error) {
 		if message.ProtocolVersion != iotago.ProtocolVersion {
 			return iotago.MessageID{}, fmt.Errorf("msg has invalid protocol version %d instead of %d", message.ProtocolVersion, iotago.ProtocolVersion)
@@ -298,7 +293,6 @@ func NewFaucetTestEnv(t *testing.T,
 		testsuite.DeSerializationParameters,
 		faucetWallet.Address(),
 		faucetWallet.AddressSigner(),
-		tipselFunc,
 		storeMessageFunc,
 		faucet.WithHRPNetworkPrefix(iotago.PrefixTestnet),
 		faucet.WithAmount(faucetAmount),

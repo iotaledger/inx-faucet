@@ -153,15 +153,7 @@ func provide(c *dig.Container) {
 
 			return faucetOutputs, nil
 		}
-
-		tipSel := func(ctx context.Context) (tips iotago.MessageIDs, err error) {
-			response, err := nodeClient.Tips(ctx)
-			if err != nil {
-				return nil, err
-			}
-			return response.Tips()
-		}
-
+		
 		return faucet.New(
 			Plugin.Daemon(),
 			fetchMetadata,
@@ -171,7 +163,6 @@ func provide(c *dig.Container) {
 			deps.NodeBridge.DeSerializationParameters(),
 			&faucetAddress,
 			faucetSigner,
-			tipSel,
 			deps.NodeBridge.EmitMessage,
 			faucet.WithLogger(Plugin.Logger()),
 			faucet.WithHRPNetworkPrefix(bech32Prefix),
