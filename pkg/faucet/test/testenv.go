@@ -173,10 +173,11 @@ func NewFaucetTestEnv(t *testing.T,
 	defaultDaemon.Start()
 
 	fetchMetadataFunc := func(ctx context.Context, messageID iotago.MessageID) (*faucet.Metadata, error) {
-		metadata := te.Storage().CachedMessageMetadataOrNil(hornet.MessageIDFromArray(messageID))
+		metadata := te.Storage().CachedMessageMetadataOrNil(hornet.MessageIDFromArray(messageID)) // metadata +1
 		if metadata == nil {
 			return nil, nil
 		}
+		metadata.Release(true) // metadata -1
 
 		cmi := te.SyncManager().ConfirmedMilestoneIndex()
 		_, ocri, err := dag.ConeRootIndexes(ctx, te.Storage(), metadata.Retain(), cmi) // meta pass +1
