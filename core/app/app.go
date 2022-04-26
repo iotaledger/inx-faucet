@@ -19,7 +19,7 @@ var (
 	AppName = "inx-faucet"
 
 	// Version of the app.
-	Version = "0.1.0"
+	Version = "0.2.0"
 
 	// configs
 	appConfig = configuration.New()

@@ -3,13 +3,13 @@ module github.com/gohornet/inx-faucet
 go 1.18
 
 require (
-	github.com/gohornet/hornet v1.1.0-rc1.0.20220425142420-248fcda75052
+	github.com/gohornet/hornet v1.1.0-rc1.0.20220426154836-f10a5379324a
 	github.com/grpc-ecosystem/go-grpc-middleware v1.3.0
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0
-	github.com/iotaledger/hive.go v0.0.0-20220422070230-888c697ffcb8
-	github.com/iotaledger/hive.go/serializer/v2 v2.0.0-20220422070230-888c697ffcb8
-	github.com/iotaledger/inx/go v0.0.0-20220425132048-f7b1a29461f9
-	github.com/iotaledger/iota.go/v3 v3.0.0-20220420130927-8fee238d3a93
+	github.com/iotaledger/hive.go v0.0.0-20220426085024-dfad09f16be5
+	github.com/iotaledger/hive.go/serializer/v2 v2.0.0-20220426085024-dfad09f16be5
+	github.com/iotaledger/inx/go v0.0.0-20220426134928-ea26015a5aad
+	github.com/iotaledger/iota.go/v3 v3.0.0-20220426124950-4b19bfb47f9a
 	github.com/labstack/echo/v4 v4.7.2
 	github.com/pkg/errors v0.9.1
 	github.com/spf13/pflag v1.0.5
@@ -30,7 +30,7 @@ require (
 	github.com/cespare/xxhash/v2 v2.1.2 // indirect
 	github.com/cockroachdb/errors v1.9.0 // indirect
 	github.com/cockroachdb/logtags v0.0.0-20211118104740-dabe8e521a4f // indirect
-	github.com/cockroachdb/pebble v0.0.0-20220421143146-8decd08cdb9d // indirect
+	github.com/cockroachdb/pebble v0.0.0-20220425201258-4c199d34d763 // indirect
 	github.com/cockroachdb/redact v1.1.3 // indirect
 	github.com/codahale/hdrhistogram v0.9.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
@@ -45,6 +45,7 @@ require (
 	github.com/fsnotify/fsnotify v1.5.3 // indirect
 	github.com/getsentry/sentry-go v0.13.0 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
+	github.com/gohornet/grocksdb v1.7.1-0.20220426081058-60f50d7c59e8 // indirect
 	github.com/golang-jwt/jwt v3.2.2+incompatible // indirect
 	github.com/golang/glog v1.0.0 // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
@@ -59,7 +60,7 @@ require (
 	github.com/ipfs/go-ds-badger v0.3.0 // indirect
 	github.com/ipfs/go-log/v2 v2.5.1 // indirect
 	github.com/jbenet/goprocess v0.1.4 // indirect
-	github.com/klauspost/compress v1.15.1 // indirect
+	github.com/klauspost/compress v1.15.2 // indirect
 	github.com/klauspost/cpuid/v2 v2.0.12 // indirect
 	github.com/knadh/koanf v1.4.1 // indirect
 	github.com/kr/pretty v0.3.0 // indirect
@@ -71,7 +72,7 @@ require (
 	github.com/libp2p/go-libp2p-peerstore v0.6.0 // indirect
 	github.com/libp2p/go-libp2p-resource-manager v0.3.0 // indirect
 	github.com/libp2p/go-openssl v0.0.7 // indirect
-	github.com/linxGnu/grocksdb v1.7.0 // indirect
+	github.com/libp2p/go-reuseport v0.2.0 // indirect
 	github.com/mattn/go-colorable v0.1.12 // indirect
 	github.com/mattn/go-isatty v0.0.14 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.2-0.20181231171920-c182affec369 // indirect
@@ -114,7 +115,7 @@ require (
 	go.uber.org/zap v1.21.0 // indirect
 	golang.org/x/crypto v0.0.0-20220411220226-7b82a4e95df4 // indirect
 	golang.org/x/exp v0.0.0-20220414153411-bcd21879b8fd // indirect
-	golang.org/x/net v0.0.0-20220421235706-1d1ef9303861 // indirect
+	golang.org/x/net v0.0.0-20220425223048-2871e0cb64e4 // indirect
 	golang.org/x/sys v0.0.0-20220422013727-9388b58f7150 // indirect
 	golang.org/x/text v0.3.7 // indirect
 	golang.org/x/xerrors v0.0.0-20220411194840-2f41105eb62f // indirect

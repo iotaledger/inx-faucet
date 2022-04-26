@@ -110,10 +110,8 @@ type Faucet struct {
 	collectOutputsFunc BasicOutputsForAddressFunc
 	// used to determine the sync status of the node.
 	nodeSyncedFunc IsNodeSyncedFunc
-	// id of the network the faucet is running in.
-	networkID uint64
-	// Deserialization parameters including byte costs
-	deSeriParas *iotago.DeSerializationParameters
+	// Protocol parameters including byte costs
+	protoParas *iotago.ProtocolParameters
 	// the address of the faucet.
 	address iotago.Address
 	// used to sign the faucet transactions.
@@ -145,7 +143,6 @@ type Faucet struct {
 
 // the default options applied to the faucet.
 var defaultOptions = []Option{
-	WithHRPNetworkPrefix(iotago.PrefixTestnet),
 	WithTokenName("TestToken"),
 	WithAmount(10000000),            // 10 Mi
 	WithSmallAmount(1000000),        // 1 Mi
@@ -160,7 +157,6 @@ var defaultOptions = []Option{
 type Options struct {
 	// the logger used to log events.
 	logger            *logger.Logger
-	hrpNetworkPrefix  iotago.NetworkPrefix
 	tokenName         string
 	amount            uint64
 	smallAmount       uint64
@@ -182,13 +178,6 @@ func (so *Options) apply(opts ...Option) {
 func WithLogger(logger *logger.Logger) Option {
 	return func(opts *Options) {
 		opts.logger = logger
-	}
-}
-
-// WithHRPNetworkPrefix sets the bech32 HRP network prefix.
-func WithHRPNetworkPrefix(networkPrefix iotago.NetworkPrefix) Option {
-	return func(opts *Options) {
-		opts.hrpNetworkPrefix = networkPrefix
 	}
 }
 
@@ -278,8 +267,7 @@ func New(
 	messageMetadataFunc MessageMetadataFunc,
 	collectOutputsFunc BasicOutputsForAddressFunc,
 	nodeSyncedFunc IsNodeSyncedFunc,
-	networkID uint64,
-	deSeriParas *iotago.DeSerializationParameters,
+	protoParas *iotago.ProtocolParameters,
 	address iotago.Address,
 	addressSigner iotago.AddressSigner,
 	sendMessageFunc SendMessageFunc,
@@ -294,8 +282,7 @@ func New(
 		messageMetadataFunc: messageMetadataFunc,
 		collectOutputsFunc:  collectOutputsFunc,
 		nodeSyncedFunc:      nodeSyncedFunc,
-		networkID:           networkID,
-		deSeriParas:         deSeriParas,
+		protoParas:          protoParas,
 		address:             address,
 		addressSigner:       addressSigner,
 		sendMessageFunc:     sendMessageFunc,
@@ -322,18 +309,13 @@ func (f *Faucet) init() {
 	f.lastRemainderOutput = nil
 }
 
-// NetworkPrefix returns the used network prefix.
-func (f *Faucet) NetworkPrefix() iotago.NetworkPrefix {
-	return f.opts.hrpNetworkPrefix
-}
-
 // Info returns the used faucet address and remaining balance.
 func (f *Faucet) Info() (*FaucetInfoResponse, error) {
 	return &FaucetInfoResponse{
-		Address:   f.address.Bech32(f.opts.hrpNetworkPrefix),
+		Address:   f.address.Bech32(f.protoParas.Bech32HRP),
 		Balance:   f.faucetBalance,
 		TokenName: f.opts.tokenName,
-		Bech32HRP: f.opts.hrpNetworkPrefix,
+		Bech32HRP: f.protoParas.Bech32HRP,
 	}, nil
 }
 
@@ -424,8 +406,8 @@ func (f *Faucet) parseBech32Address(bech32Addr string) (iotago.Address, error) {
 		return nil, errors.WithMessage(restapi.ErrInvalidParameter, "Invalid bech32 address provided!")
 	}
 
-	if hrp != f.NetworkPrefix() {
-		return nil, errors.WithMessagef(restapi.ErrInvalidParameter, "Invalid bech32 address provided! Address does not start with \"%s\".", f.NetworkPrefix())
+	if hrp != f.protoParas.Bech32HRP {
+		return nil, errors.WithMessagef(restapi.ErrInvalidParameter, "Invalid bech32 address provided! Address does not start with \"%s\".", f.protoParas.Bech32HRP)
 	}
 
 	return bech32Address, nil
@@ -481,13 +463,13 @@ func (f *Faucet) createMessage(txPayload iotago.Payload, tip ...iotago.MessageID
 		tips = append(tips, tip[0])
 	}
 
-	return builder.NewMessageBuilder().ParentsMessageIDs(tips).Payload(txPayload).Build()
+	return builder.NewMessageBuilder(f.protoParas.Version).ParentsMessageIDs(tips).Payload(txPayload).Build()
 }
 
 // buildTransactionPayload creates a signed transaction payload with all UTXO and batched requests.
 func (f *Faucet) buildTransactionPayload(unspentOutputs []UTXOOutput, batchedRequests []*queueItem) (*iotago.Transaction, *iotago.TransactionID, []iotago.OutputID, *iotago.UTXOInput, uint64, error) {
 
-	txBuilder := builder.NewTransactionBuilder(f.networkID)
+	txBuilder := builder.NewTransactionBuilder(f.protoParas.NetworkID())
 	txBuilder.AddTaggedDataPayload(&iotago.TaggedData{Tag: f.opts.tagMessage, Data: nil})
 
 	outputCount := 0
@@ -541,7 +523,7 @@ func (f *Faucet) buildTransactionPayload(unspentOutputs []UTXOOutput, batchedReq
 		})
 	}
 
-	txPayload, err := txBuilder.Build(f.deSeriParas, f.addressSigner)
+	txPayload, err := txBuilder.Build(f.protoParas, f.addressSigner)
 	if err != nil {
 		return nil, nil, nil, nil, 0, err
 	}
@@ -732,7 +714,7 @@ func (f *Faucet) RunFaucetLoop(ctx context.Context, initDoneCallback func()) err
 	// set initial faucet balance
 	faucetBalance, err := f.computeAddressBalance(ctx, f.address)
 	if err != nil {
-		return common.CriticalError(fmt.Errorf("reading faucet address balance failed: %s, error: %s", f.address.Bech32(f.opts.hrpNetworkPrefix), err))
+		return common.CriticalError(fmt.Errorf("reading faucet address balance failed: %s, error: %s", f.address.Bech32(f.protoParas.Bech32HRP), err))
 	}
 	f.faucetBalance = faucetBalance
 
@@ -965,7 +947,7 @@ func (f *Faucet) ApplyNewLedgerUpdate(createdOutputs iotago.OutputIDs, consumedO
 	// no need to lock since we are in the milestone confirmation anyway
 	faucetBalance, err := f.computeAddressBalance(f.runloopCtx, f.address)
 	if err != nil {
-		return common.CriticalError(fmt.Errorf("reading faucet address balance failed: %s, error: %s", f.address.Bech32(f.opts.hrpNetworkPrefix), err))
+		return common.CriticalError(fmt.Errorf("reading faucet address balance failed: %s, error: %s", f.address.Bech32(f.protoParas.Bech32HRP), err))
 	}
 
 	if faucetBalance < pendingRequestsBalance {

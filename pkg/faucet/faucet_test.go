@@ -9,7 +9,6 @@ import (
 	"github.com/gohornet/hornet/pkg/model/hornet"
 	"github.com/gohornet/hornet/pkg/model/milestone"
 	"github.com/gohornet/inx-faucet/pkg/faucet/test"
-	iotago "github.com/iotaledger/iota.go/v3"
 )
 
 func TestSingleRequest(t *testing.T) {
@@ -39,7 +38,7 @@ func TestSingleRequest(t *testing.T) {
 	require.Equal(t, milestone.Index(4), confirmedMilestoneIndex)
 
 	// Verify balances
-	genesisBalance := iotago.TokenSupply - faucetBalance - wallet1Balance - wallet2Balance - wallet3Balance
+	genesisBalance := env.ProtocolParameters().TokenSupply - faucetBalance - wallet1Balance - wallet2Balance - wallet3Balance
 
 	env.AssertFaucetBalance(faucetBalance)
 	env.TestEnv.AssertLedgerBalance(env.GenesisWallet, genesisBalance)
@@ -101,7 +100,7 @@ func TestMultipleRequests(t *testing.T) {
 	require.Equal(t, milestone.Index(4), confirmedMilestoneIndex)
 
 	// Verify balances
-	genesisBalance := iotago.TokenSupply - faucetBalance - wallet1Balance - wallet2Balance - wallet3Balance
+	genesisBalance := env.ProtocolParameters().TokenSupply - faucetBalance - wallet1Balance - wallet2Balance - wallet3Balance
 
 	env.AssertFaucetBalance(faucetBalance)
 	env.TestEnv.AssertLedgerBalance(env.GenesisWallet, genesisBalance)
@@ -193,7 +192,7 @@ func TestDoubleSpent(t *testing.T) {
 	require.Equal(t, milestone.Index(4), confirmedMilestoneIndex)
 
 	// Verify balances
-	genesisBalance := iotago.TokenSupply - faucetBalance - wallet1Balance - wallet2Balance - wallet3Balance
+	genesisBalance := env.ProtocolParameters().TokenSupply - faucetBalance - wallet1Balance - wallet2Balance - wallet3Balance
 
 	env.AssertFaucetBalance(faucetBalance)
 	env.TestEnv.AssertLedgerBalance(env.GenesisWallet, genesisBalance)
@@ -270,7 +269,7 @@ func TestBelowMaxDepth(t *testing.T) {
 	require.Equal(t, milestone.Index(4), confirmedMilestoneIndex)
 
 	// Verify balances
-	genesisBalance := iotago.TokenSupply - faucetBalance - wallet1Balance - wallet2Balance - wallet3Balance
+	genesisBalance := env.ProtocolParameters().TokenSupply - faucetBalance - wallet1Balance - wallet2Balance - wallet3Balance
 
 	env.AssertFaucetBalance(faucetBalance)
 	env.TestEnv.AssertLedgerBalance(env.GenesisWallet, genesisBalance)
@@ -336,7 +335,7 @@ func TestBelowMaxDepthAfterRequest(t *testing.T) {
 	require.Equal(t, milestone.Index(4), confirmedMilestoneIndex)
 
 	// Verify balances
-	genesisBalance := iotago.TokenSupply - faucetBalance - wallet1Balance - wallet2Balance - wallet3Balance
+	genesisBalance := env.ProtocolParameters().TokenSupply - faucetBalance - wallet1Balance - wallet2Balance - wallet3Balance
 
 	env.AssertFaucetBalance(faucetBalance)
 	env.TestEnv.AssertLedgerBalance(env.GenesisWallet, genesisBalance)
@@ -398,7 +397,7 @@ func TestNotEnoughFaucetFunds(t *testing.T) {
 	require.NotNil(t, env)
 
 	// Verify balances
-	genesisBalance := iotago.TokenSupply - faucetBalance - wallet1Balance - wallet2Balance - wallet3Balance
+	genesisBalance := env.ProtocolParameters().TokenSupply - faucetBalance - wallet1Balance - wallet2Balance - wallet3Balance
 
 	env.AssertFaucetBalance(faucetBalance)
 	env.TestEnv.AssertLedgerBalance(env.GenesisWallet, genesisBalance)
@@ -455,7 +454,7 @@ func TestCollectFaucetFunds(t *testing.T) {
 	require.Equal(t, milestone.Index(4), confirmedMilestoneIndex)
 
 	// Verify balances
-	genesisBalance := iotago.TokenSupply - faucetBalance - wallet1Balance - wallet2Balance - wallet3Balance
+	genesisBalance := env.ProtocolParameters().TokenSupply - faucetBalance - wallet1Balance - wallet2Balance - wallet3Balance
 
 	env.AssertFaucetBalance(faucetBalance)
 	env.TestEnv.AssertLedgerBalance(env.GenesisWallet, genesisBalance)

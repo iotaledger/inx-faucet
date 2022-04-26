@@ -104,7 +104,7 @@ func provide(c *dig.Container) {
 		}
 
 		nodeClient := deps.NodeBridge.INXNodeClient()
-		bech32Prefix := deps.NodeBridge.ProtocolParameters.NetworkPrefix()
+		protoParas := deps.NodeBridge.NodeConfig.UnwrapProtocolParameters()
 
 		collectOutputs := func(ctx context.Context, address iotago.Address) ([]faucet.UTXOOutput, error) {
 
@@ -114,7 +114,7 @@ func provide(c *dig.Container) {
 			}
 
 			query := &nodeclient.BasicOutputsQuery{
-				AddressBech32: address.Bech32(bech32Prefix),
+				AddressBech32: address.Bech32(protoParas.Bech32HRP),
 				IndexerExpirationParas: nodeclient.IndexerExpirationParas{
 					HasExpirationCondition: false,
 				},
@@ -158,13 +158,11 @@ func provide(c *dig.Container) {
 			fetchMetadata,
 			collectOutputs,
 			deps.NodeBridge.IsNodeSynced,
-			iotago.NetworkIDFromString(deps.NodeBridge.ProtocolParameters.GetNetworkName()),
-			deps.NodeBridge.DeSerializationParameters(),
+			protoParas,
 			&faucetAddress,
 			faucetSigner,
 			deps.NodeBridge.EmitMessage,
 			faucet.WithLogger(CorePlugin.Logger()),
-			faucet.WithHRPNetworkPrefix(bech32Prefix),
 			faucet.WithTokenName("IOTA"), //TODO: get name from future protocol params
 			faucet.WithAmount(uint64(deps.AppConfig.Int64(CfgFaucetAmount))),
 			faucet.WithSmallAmount(uint64(deps.AppConfig.Int64(CfgFaucetSmallAmount))),
