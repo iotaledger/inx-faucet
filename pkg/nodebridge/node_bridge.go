@@ -18,11 +18,11 @@ import (
 )
 
 type NodeBridge struct {
-	Logger             *logger.Logger
-	Client             inx.INXClient
-	ProtocolParameters *inx.ProtocolParameters
-	TangleListener     *TangleListener
-	Events             *Events
+	Logger         *logger.Logger
+	Client         inx.INXClient
+	NodeConfig     *inx.NodeConfiguration
+	TangleListener *TangleListener
+	Events         *Events
 
 	isSyncedMutex      sync.RWMutex
 	latestMilestone    *inx.MilestoneInfo
@@ -54,7 +54,7 @@ func NewNodeBridge(ctx context.Context, client inx.INXClient, logger *logger.Log
 		return 1 * time.Second
 	}
 
-	protocolParams, err := client.ReadProtocolParameters(ctx, &inx.NoParams{}, grpc_retry.WithMax(5), grpc_retry.WithBackoff(retryBackoff))
+	nodeConfig, err := client.ReadNodeConfiguration(ctx, &inx.NoParams{}, grpc_retry.WithMax(5), grpc_retry.WithBackoff(retryBackoff))
 	if err != nil {
 		return nil, err
 	}
@@ -65,10 +65,10 @@ func NewNodeBridge(ctx context.Context, client inx.INXClient, logger *logger.Log
 	}
 
 	return &NodeBridge{
-		Logger:             logger,
-		Client:             client,
-		ProtocolParameters: protocolParams,
-		TangleListener:     newTangleListener(),
+		Logger:         logger,
+		Client:         client,
+		NodeConfig:     nodeConfig,
+		TangleListener: newTangleListener(),
 		Events: &Events{
 			MessageSolid:              events.NewEvent(INXMessageMetadataCaller),
 			ConfirmedMilestoneChanged: events.NewEvent(INXMilestoneCaller),
@@ -77,20 +77,6 @@ func NewNodeBridge(ctx context.Context, client inx.INXClient, logger *logger.Log
 		latestMilestone:    nodeStatus.GetLatestMilestone(),
 		confirmedMilestone: nodeStatus.GetConfirmedMilestone(),
 	}, nil
-}
-
-func (n *NodeBridge) DeSerializationParameters() *iotago.DeSerializationParameters {
-	return &iotago.DeSerializationParameters{
-		RentStructure: &iotago.RentStructure{
-			VByteCost:    n.ProtocolParameters.RentStructure.GetVByteCost(),
-			VBFactorData: iotago.VByteCostFactor(n.ProtocolParameters.RentStructure.GetVByteFactorData()),
-			VBFactorKey:  iotago.VByteCostFactor(n.ProtocolParameters.RentStructure.GetVByteFactorKey()),
-		},
-	}
-}
-
-func (n *NodeBridge) MilestonePublicKeyCount() int {
-	return int(n.ProtocolParameters.GetMilestonePublicKeyCount())
 }
 
 func (n *NodeBridge) Run(ctx context.Context) {

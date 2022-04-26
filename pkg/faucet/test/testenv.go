@@ -84,7 +84,7 @@ func NewFaucetTestEnv(t *testing.T,
 	// Add token supply to our local HDWallet
 	genesisWallet.BookOutput(te.GenesisOutput)
 	if assertSteps {
-		te.AssertWalletBalance(genesisWallet, iotago.TokenSupply)
+		te.AssertWalletBalance(genesisWallet, te.ProtocolParameters().TokenSupply)
 	}
 
 	lastMessageID := te.Milestones[0].Milestone().MessageID
@@ -162,7 +162,7 @@ func NewFaucetTestEnv(t *testing.T,
 		require.Equal(t, 1, confStats.MessagesExcludedWithoutTransactions) // the milestone
 
 		// Verify balances
-		te.AssertWalletBalance(genesisWallet, iotago.TokenSupply-faucetBalance-wallet1Balance-wallet2Balance-wallet3Balance)
+		te.AssertWalletBalance(genesisWallet, te.ProtocolParameters().TokenSupply-faucetBalance-wallet1Balance-wallet2Balance-wallet3Balance)
 		te.AssertWalletBalance(faucetWallet, faucetBalance)
 		te.AssertWalletBalance(seed1Wallet, wallet1Balance)
 		te.AssertWalletBalance(seed2Wallet, wallet2Balance)
@@ -216,8 +216,8 @@ func NewFaucetTestEnv(t *testing.T,
 	}
 
 	storeMessageFunc := func(ctx context.Context, message *iotago.Message) (iotago.MessageID, error) {
-		if message.ProtocolVersion != iotago.ProtocolVersion {
-			return iotago.MessageID{}, fmt.Errorf("msg has invalid protocol version %d instead of %d", message.ProtocolVersion, iotago.ProtocolVersion)
+		if message.ProtocolVersion != te.ProtocolParameters().Version {
+			return iotago.MessageID{}, fmt.Errorf("msg has invalid protocol version %d instead of %d", message.ProtocolVersion, te.ProtocolParameters().Version)
 		}
 
 		if len(message.Parents) == 0 {
@@ -229,7 +229,7 @@ func NewFaucetTestEnv(t *testing.T,
 			return iotago.MessageID{}, err
 		}
 
-		msg, err := storage.NewMessage(message, serializer.DeSeriModePerformValidation, testsuite.DeSerializationParameters)
+		msg, err := storage.NewMessage(message, serializer.DeSeriModePerformValidation, te.ProtocolParameters())
 		if err != nil {
 			return iotago.MessageID{}, err
 		}
@@ -299,12 +299,10 @@ func NewFaucetTestEnv(t *testing.T,
 		fetchMetadataFunc,
 		collectOutputsFunc,
 		te.SyncManager().IsNodeSynced,
-		te.NetworkID(),
-		testsuite.DeSerializationParameters,
+		te.ProtocolParameters(),
 		faucetWallet.Address(),
 		faucetWallet.AddressSigner(),
 		storeMessageFunc,
-		faucet.WithHRPNetworkPrefix(iotago.PrefixTestnet),
 		faucet.WithAmount(faucetAmount),
 		faucet.WithSmallAmount(faucetSmallAmount),
 		faucet.WithMaxAddressBalance(faucetMaxAddressBalance),
@@ -356,6 +354,10 @@ func NewFaucetTestEnv(t *testing.T,
 		Faucet:          f,
 		faucetCtxCancel: faucetCtxCancel,
 	}
+}
+
+func (env *FaucetTestEnv) ProtocolParameters() *iotago.ProtocolParameters {
+	return env.TestEnv.ProtocolParameters()
 }
 
 func (env *FaucetTestEnv) ConfirmedMilestoneIndex() milestone.Index {
