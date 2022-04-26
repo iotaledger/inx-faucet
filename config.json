@@ -6,7 +6,6 @@
     "maxOutputCount": 127,
     "tagMessage": "HORNET FAUCET",
     "batchTimeout": "2s",
-    "powWorkerCount": 0,
     "bindAddress": "0.0.0.0:8191"
   }
 }
