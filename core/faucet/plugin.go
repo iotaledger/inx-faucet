@@ -172,7 +172,6 @@ func provide(c *dig.Container) {
 			faucet.WithMaxOutputCount(deps.AppConfig.Int(CfgFaucetMaxOutputCount)),
 			faucet.WithTagMessage(deps.AppConfig.String(CfgFaucetTagMessage)),
 			faucet.WithBatchTimeout(deps.AppConfig.Duration(CfgFaucetBatchTimeout)),
-			faucet.WithPowWorkerCount(deps.AppConfig.Int(CfgFaucetPoWWorkerCount)),
 		)
 	}); err != nil {
 		CorePlugin.LogPanic(err)

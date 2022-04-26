@@ -31,7 +31,6 @@ import (
 const (
 	faucetMaxOutputCount = iotago.MaxOutputsCount
 	faucetTagMessage     = "FAUCET"
-	faucetPowWorkerCount = 0
 	faucetBatchTimeout   = 2 * time.Second
 )
 
@@ -311,7 +310,6 @@ func NewFaucetTestEnv(t *testing.T,
 		faucet.WithMaxOutputCount(faucetMaxOutputCount),
 		faucet.WithTagMessage(faucetTagMessage),
 		faucet.WithBatchTimeout(faucetBatchTimeout),
-		faucet.WithPowWorkerCount(faucetPowWorkerCount),
 	)
 
 	faucetCtx, faucetCtxCancel := context.WithCancel(context.Background())

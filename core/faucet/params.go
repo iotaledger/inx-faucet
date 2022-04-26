@@ -22,8 +22,6 @@ const (
 	CfgFaucetTagMessage = "faucet.tagMessage"
 	// the maximum duration for collecting faucet batches.
 	CfgFaucetBatchTimeout = "faucet.batchTimeout"
-	// the amount of workers used for calculating PoW when issuing faucet messages.
-	CfgFaucetPoWWorkerCount = "faucet.powWorkerCount"
 	// the bind address on which the faucet website can be accessed from
 	CfgFaucetBindAddress = "faucet.bindAddress"
 )
@@ -38,7 +36,6 @@ var params = &node.PluginParams{
 			fs.Int(CfgFaucetMaxOutputCount, iotago.MaxOutputsCount, "the maximum output count per faucet message")
 			fs.String(CfgFaucetTagMessage, "HORNET FAUCET", "the faucet transaction tag payload")
 			fs.Duration(CfgFaucetBatchTimeout, 2*time.Second, "the maximum duration for collecting faucet batches")
-			fs.Int(CfgFaucetPoWWorkerCount, 0, "the amount of workers used for calculating PoW when issuing faucet messages")
 			fs.String(CfgFaucetBindAddress, "localhost:8091", "the bind address on which the faucet website can be accessed from")
 			return fs
 		}(),

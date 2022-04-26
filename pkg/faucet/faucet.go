@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"runtime"
 	"time"
 
 	"github.com/labstack/echo/v4"
@@ -153,7 +152,6 @@ var defaultOptions = []Option{
 	WithMaxOutputCount(iotago.MaxOutputsCount),
 	WithTagMessage("HORNET FAUCET"),
 	WithBatchTimeout(2 * time.Second),
-	WithPowWorkerCount(0),
 }
 
 // Options define options for the faucet.
@@ -168,7 +166,6 @@ type Options struct {
 	maxOutputCount    int
 	tagMessage        []byte
 	batchTimeout      time.Duration
-	powWorkerCount    int
 }
 
 // applies the given Option.
@@ -246,22 +243,6 @@ func WithTagMessage(tagMessage string) Option {
 func WithBatchTimeout(timeout time.Duration) Option {
 	return func(opts *Options) {
 		opts.batchTimeout = timeout
-	}
-}
-
-// WithPowWorkerCount defines the amount of workers used for calculating PoW when issuing faucet messages.
-func WithPowWorkerCount(powWorkerCount int) Option {
-
-	if powWorkerCount == 0 {
-		powWorkerCount = runtime.NumCPU() - 1
-	}
-
-	if powWorkerCount < 1 {
-		powWorkerCount = 1
-	}
-
-	return func(opts *Options) {
-		opts.powWorkerCount = powWorkerCount
 	}
 }
 
