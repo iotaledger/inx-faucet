@@ -86,13 +86,13 @@ func NewFaucetTestEnv(t *testing.T,
 		te.AssertWalletBalance(genesisWallet, te.ProtocolParameters().TokenSupply)
 	}
 
-	lastMessageID := te.Milestones[0].Milestone().MessageID
+	var lastMessageID hornet.MessageID
 	messagesCount := 0
 
 	// Fund Faucet
 	if faucetBalance > 0 {
 		messageA := te.NewMessageBuilder("A").
-			Parents(hornet.MessageIDs{lastMessageID, te.Milestones[1].Milestone().MessageID}).
+			Parents(hornet.MessageIDs{lastMessageID, te.LastMilestoneMessageID()}).
 			FromWallet(genesisWallet).
 			ToWallet(faucetWallet).
 			Amount(faucetBalance).
@@ -107,7 +107,7 @@ func NewFaucetTestEnv(t *testing.T,
 	// Fund Wallet1
 	if wallet1Balance > 0 {
 		messageB := te.NewMessageBuilder("B").
-			Parents(hornet.MessageIDs{lastMessageID, te.Milestones[1].Milestone().MessageID}).
+			Parents(hornet.MessageIDs{lastMessageID, te.LastMilestoneMessageID()}).
 			FromWallet(genesisWallet).
 			ToWallet(seed1Wallet).
 			Amount(wallet1Balance).
@@ -122,7 +122,7 @@ func NewFaucetTestEnv(t *testing.T,
 	// Fund Wallet2
 	if wallet2Balance > 0 {
 		messageC := te.NewMessageBuilder("C").
-			Parents(hornet.MessageIDs{lastMessageID, te.Milestones[1].Milestone().MessageID}).
+			Parents(hornet.MessageIDs{lastMessageID, te.LastMilestoneMessageID()}).
 			FromWallet(genesisWallet).
 			ToWallet(seed2Wallet).
 			Amount(wallet2Balance).
@@ -138,7 +138,7 @@ func NewFaucetTestEnv(t *testing.T,
 	// Fund Wallet3
 	if wallet3Balance > 0 {
 		messageD := te.NewMessageBuilder("D").
-			Parents(hornet.MessageIDs{lastMessageID, te.Milestones[1].Milestone().MessageID}).
+			Parents(hornet.MessageIDs{lastMessageID, te.LastMilestoneMessageID()}).
 			FromWallet(genesisWallet).
 			ToWallet(seed3Wallet).
 			Amount(wallet3Balance).

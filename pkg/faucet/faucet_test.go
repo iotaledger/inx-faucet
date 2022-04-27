@@ -203,7 +203,7 @@ func TestDoubleSpent(t *testing.T) {
 
 	// create a conflicting transaction that gets confirmed instead of the faucet message
 	message := env.TestEnv.NewMessageBuilder().
-		LatestMilestonesAsParents().
+		LatestMilestoneAsParents().
 		FromWallet(env.FaucetWallet).
 		ToWallet(env.GenesisWallet).
 		Amount(faucetAmount).
@@ -477,7 +477,7 @@ func TestCollectFaucetFunds(t *testing.T) {
 	env.TestEnv.AssertLedgerBalance(env.Wallet1, calculatedWallet1Balance)
 
 	message := env.TestEnv.NewMessageBuilder().
-		LatestMilestonesAsParents().
+		LatestMilestoneAsParents().
 		FromWallet(env.GenesisWallet).
 		ToWallet(env.FaucetWallet).
 		Amount(faucetAmount).
