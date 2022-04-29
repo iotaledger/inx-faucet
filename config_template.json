@@ -1,0 +1,14 @@
+{
+  "inx": {
+    "address": "localhost:9029"
+  },
+  "faucet": {
+    "amount": 1000000000,
+    "smallAmount": 100000000,
+    "maxAddressBalance": 2000000000,
+    "maxOutputCount": 127,
+    "tagMessage": "HORNET FAUCET",
+    "batchTimeout": "2s",
+    "bindAddress": "0.0.0.0:8191"
+  }
+}
