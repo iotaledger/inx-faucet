@@ -30,9 +30,9 @@ var params = &node.PluginParams{
 	Params: map[string]*flag.FlagSet{
 		"appConfig": func() *flag.FlagSet {
 			fs := flag.NewFlagSet("", flag.ContinueOnError)
-			fs.Int64(CfgFaucetAmount, 10000000, "the amount of funds the requester receives")
-			fs.Int64(CfgFaucetSmallAmount, 1000000, "the amount of funds the requester receives if the target address has more funds than the faucet amount and less than maximum")
-			fs.Int64(CfgFaucetMaxAddressBalance, 20000000, "the maximum allowed amount of funds on the target address")
+			fs.Int64(CfgFaucetAmount, 1000000000, "the amount of funds the requester receives")
+			fs.Int64(CfgFaucetSmallAmount, 100000000, "the amount of funds the requester receives if the target address has more funds than the faucet amount and less than maximum")
+			fs.Int64(CfgFaucetMaxAddressBalance, 2000000000, "the maximum allowed amount of funds on the target address")
 			fs.Int(CfgFaucetMaxOutputCount, iotago.MaxOutputsCount, "the maximum output count per faucet message")
 			fs.String(CfgFaucetTagMessage, "HORNET FAUCET", "the faucet transaction tag payload")
 			fs.Duration(CfgFaucetBatchTimeout, 2*time.Second, "the maximum duration for collecting faucet batches")
