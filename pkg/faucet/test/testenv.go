@@ -78,7 +78,7 @@ func NewFaucetTestEnv(t *testing.T,
 
 	genesisAddress := genesisWallet.Address()
 
-	te := testsuite.SetupTestEnvironment(t, genesisAddress, 2, BelowMaxDepth, MinPoWScore, false)
+	te := testsuite.SetupTestEnvironment(t, genesisAddress, 2, uint16(BelowMaxDepth), MinPoWScore, false)
 
 	// Add token supply to our local HDWallet
 	genesisWallet.BookOutput(te.GenesisOutput)
@@ -223,7 +223,7 @@ func NewFaucetTestEnv(t *testing.T,
 			message.Parents = iotago.MessageIDs{te.LastMilestoneMessageID().ToArray()}
 		}
 
-		err := te.PoWHandler.DoPoW(ctx, message, 1)
+		_, err := te.PoWHandler.DoPoW(ctx, message, 1)
 		if err != nil {
 			return iotago.MessageID{}, err
 		}
