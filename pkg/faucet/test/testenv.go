@@ -86,13 +86,13 @@ func NewFaucetTestEnv(t *testing.T,
 		te.AssertWalletBalance(genesisWallet, te.ProtocolParameters().TokenSupply)
 	}
 
-	var lastMessageID hornet.MessageID
-	messagesCount := 0
+	var lastBlockID hornet.MessageID
+	blocksCount := 0
 
 	// Fund Faucet
 	if faucetBalance > 0 {
-		messageA := te.NewMessageBuilder("A").
-			Parents(hornet.MessageIDs{lastMessageID, te.LastMilestoneMessageID()}).
+		blockA := te.NewMessageBuilder("A").
+			Parents(hornet.MessageIDs{lastBlockID, te.LastMilestoneMessageID()}).
 			FromWallet(genesisWallet).
 			ToWallet(faucetWallet).
 			Amount(faucetBalance).
@@ -100,14 +100,14 @@ func NewFaucetTestEnv(t *testing.T,
 			Store().
 			BookOnWallets()
 
-		messagesCount++
-		lastMessageID = messageA.StoredMessageID()
+		blocksCount++
+		lastBlockID = blockA.StoredMessageID()
 	}
 
 	// Fund Wallet1
 	if wallet1Balance > 0 {
-		messageB := te.NewMessageBuilder("B").
-			Parents(hornet.MessageIDs{lastMessageID, te.LastMilestoneMessageID()}).
+		blockB := te.NewMessageBuilder("B").
+			Parents(hornet.MessageIDs{lastBlockID, te.LastMilestoneMessageID()}).
 			FromWallet(genesisWallet).
 			ToWallet(seed1Wallet).
 			Amount(wallet1Balance).
@@ -115,14 +115,14 @@ func NewFaucetTestEnv(t *testing.T,
 			Store().
 			BookOnWallets()
 
-		messagesCount++
-		lastMessageID = messageB.StoredMessageID()
+		blocksCount++
+		lastBlockID = blockB.StoredMessageID()
 	}
 
 	// Fund Wallet2
 	if wallet2Balance > 0 {
-		messageC := te.NewMessageBuilder("C").
-			Parents(hornet.MessageIDs{lastMessageID, te.LastMilestoneMessageID()}).
+		blockC := te.NewMessageBuilder("C").
+			Parents(hornet.MessageIDs{lastBlockID, te.LastMilestoneMessageID()}).
 			FromWallet(genesisWallet).
 			ToWallet(seed2Wallet).
 			Amount(wallet2Balance).
@@ -130,15 +130,15 @@ func NewFaucetTestEnv(t *testing.T,
 			Store().
 			BookOnWallets()
 
-		messagesCount++
-		lastMessageID = messageC.StoredMessageID()
+		blocksCount++
+		lastBlockID = blockC.StoredMessageID()
 
 	}
 
 	// Fund Wallet3
 	if wallet3Balance > 0 {
-		messageD := te.NewMessageBuilder("D").
-			Parents(hornet.MessageIDs{lastMessageID, te.LastMilestoneMessageID()}).
+		blockD := te.NewMessageBuilder("D").
+			Parents(hornet.MessageIDs{lastBlockID, te.LastMilestoneMessageID()}).
 			FromWallet(genesisWallet).
 			ToWallet(seed3Wallet).
 			Amount(wallet3Balance).
@@ -146,17 +146,17 @@ func NewFaucetTestEnv(t *testing.T,
 			Store().
 			BookOnWallets()
 
-		messagesCount++
-		lastMessageID = messageD.StoredMessageID()
+		blocksCount++
+		lastBlockID = blockD.StoredMessageID()
 
 	}
 
 	// Confirming milestone at message D
-	_, confStats := te.IssueAndConfirmMilestoneOnTips(hornet.MessageIDs{lastMessageID}, false)
+	_, confStats := te.IssueAndConfirmMilestoneOnTips(hornet.MessageIDs{lastBlockID}, false)
 	if assertSteps {
 
-		require.Equal(t, messagesCount+1, confStats.MessagesReferenced) // messagesCount + milestone itself
-		require.Equal(t, messagesCount, confStats.MessagesIncludedWithTransactions)
+		require.Equal(t, blocksCount+1, confStats.MessagesReferenced) // blocksCount + milestone itself
+		require.Equal(t, blocksCount, confStats.MessagesIncludedWithTransactions)
 		require.Equal(t, 0, confStats.MessagesExcludedWithConflictingTransactions)
 		require.Equal(t, 1, confStats.MessagesExcludedWithoutTransactions) // the milestone
 
@@ -171,8 +171,8 @@ func NewFaucetTestEnv(t *testing.T,
 	defaultDaemon := daemon.New()
 	defaultDaemon.Start()
 
-	fetchMetadataFunc := func(ctx context.Context, messageID iotago.MessageID) (*faucet.Metadata, error) {
-		metadata := te.Storage().CachedMessageMetadataOrNil(hornet.MessageIDFromArray(messageID)) // meta +1
+	fetchMetadataFunc := func(ctx context.Context, blockID iotago.BlockID) (*faucet.Metadata, error) {
+		metadata := te.Storage().CachedMessageMetadataOrNil(hornet.MessageIDFromArray(blockID)) // meta +1
 		if metadata == nil {
 			return nil, nil
 		}
@@ -214,37 +214,37 @@ func NewFaucetTestEnv(t *testing.T,
 		return faucetOutputs, nil
 	}
 
-	storeMessageFunc := func(ctx context.Context, message *iotago.Message) (iotago.MessageID, error) {
-		if message.ProtocolVersion != te.ProtocolParameters().Version {
-			return iotago.MessageID{}, fmt.Errorf("msg has invalid protocol version %d instead of %d", message.ProtocolVersion, te.ProtocolParameters().Version)
+	storeMessageFunc := func(ctx context.Context, block *iotago.Block) (iotago.BlockID, error) {
+		if block.ProtocolVersion != te.ProtocolParameters().Version {
+			return iotago.BlockID{}, fmt.Errorf("block has invalid protocol version %d instead of %d", block.ProtocolVersion, te.ProtocolParameters().Version)
 		}
 
-		if len(message.Parents) == 0 {
-			message.Parents = iotago.MessageIDs{te.LastMilestoneMessageID().ToArray()}
+		if len(block.Parents) == 0 {
+			block.Parents = iotago.BlockIDs{te.LastMilestoneMessageID().ToArray()}
 		}
 
-		_, err := te.PoWHandler.DoPoW(ctx, message, 1)
+		_, err := te.PoWHandler.DoPoW(ctx, block, 1)
 		if err != nil {
-			return iotago.MessageID{}, err
+			return iotago.BlockID{}, err
 		}
 
-		msg, err := storage.NewMessage(message, serializer.DeSeriModePerformValidation, te.ProtocolParameters())
+		blk, err := storage.NewMessage(block, serializer.DeSeriModePerformValidation, te.ProtocolParameters())
 		if err != nil {
-			return iotago.MessageID{}, err
+			return iotago.BlockID{}, err
 		}
 
-		score := pow.Score(msg.Data())
+		score := pow.Score(blk.Data())
 		if score < MinPoWScore {
-			return iotago.MessageID{}, fmt.Errorf("msg has insufficient PoW score %0.2f", score)
+			return iotago.BlockID{}, fmt.Errorf("block has insufficient PoW score %0.2f", score)
 		}
 
 		cmi := te.SyncManager().ConfirmedMilestoneIndex()
 
-		checkParentFunc := func(messageID hornet.MessageID) error {
-			cachedMsgMeta := te.Storage().CachedMessageMetadataOrNil(messageID) // meta +1
-			if cachedMsgMeta == nil {
+		checkParentFunc := func(blockID hornet.MessageID) error {
+			cachedBlockMeta := te.Storage().CachedMessageMetadataOrNil(blockID) // meta +1
+			if cachedBlockMeta == nil {
 				// parent not found
-				entryPointIndex, exists, err := te.Storage().SolidEntryPointsIndex(messageID)
+				entryPointIndex, exists, err := te.Storage().SolidEntryPointsIndex(blockID)
 				if err != nil {
 					return err
 				}
@@ -257,18 +257,18 @@ func NewFaucetTestEnv(t *testing.T,
 					return gossip.ErrMessageBelowMaxDepth
 				}
 
-				// message is a SEP and not below max depth
+				// block is a SEP and not below max depth
 				return nil
 			}
-			defer cachedMsgMeta.Release(true) // meta -1
+			defer cachedBlockMeta.Release(true) // meta -1
 
-			if !cachedMsgMeta.Metadata().IsSolid() {
-				// if the parent is not solid, the message itself can't be solid
+			if !cachedBlockMeta.Metadata().IsSolid() {
+				// if the parent is not solid, the block itself can't be solid
 				return gossip.ErrMessageNotSolid
 			}
 
 			// we pass a background context here to not prevent emitting messages at shutdown (COO etc).
-			_, ocri, err := dag.ConeRootIndexes(context.Background(), te.Storage(), cachedMsgMeta.Retain(), cmi) // meta pass +1
+			_, ocri, err := dag.ConeRootIndexes(context.Background(), te.Storage(), cachedBlockMeta.Retain(), cmi) // meta pass +1
 			if err != nil {
 				return err
 			}
@@ -281,16 +281,16 @@ func NewFaucetTestEnv(t *testing.T,
 			return nil
 		}
 
-		for _, parentMsgID := range message.Parents {
-			err := checkParentFunc(hornet.MessageIDFromArray(parentMsgID))
+		for _, parentBlockID := range block.Parents {
+			err := checkParentFunc(hornet.MessageIDFromArray(parentBlockID))
 			if err != nil {
-				return iotago.MessageID{}, err
+				return iotago.BlockID{}, err
 			}
 		}
 
-		_ = te.StoreMessage(msg) // no need to release, since we remember all the messages for later cleanup
+		_ = te.StoreMessage(blk) // no need to release, since we remember all the blocks for later cleanup
 
-		return msg.MessageID().ToArray(), nil
+		return blk.MessageID().ToArray(), nil
 	}
 
 	f := faucet.New(
@@ -375,12 +375,12 @@ func (env *FaucetTestEnv) processFaucetRequests(preFlushFunc func() error) (horn
 	wg.Add(1)
 
 	var tips hornet.MessageIDs
-	onFaucetIssuedMessage := events.NewClosure(func(messageID iotago.MessageID) {
-		tips = append(tips, hornet.MessageIDFromArray(messageID))
+	onFaucetIssuedBlock := events.NewClosure(func(blockID iotago.BlockID) {
+		tips = append(tips, hornet.MessageIDFromArray(blockID))
 		wg.Done()
 	})
-	env.Faucet.Events.IssuedBlock.Attach(onFaucetIssuedMessage)
-	defer env.Faucet.Events.IssuedBlock.Detach(onFaucetIssuedMessage)
+	env.Faucet.Events.IssuedBlock.Attach(onFaucetIssuedBlock)
+	defer env.Faucet.Events.IssuedBlock.Detach(onFaucetIssuedBlock)
 
 	if preFlushFunc != nil {
 		if err := preFlushFunc(); err != nil {
@@ -400,13 +400,13 @@ func (env *FaucetTestEnv) processFaucetRequests(preFlushFunc func() error) (horn
 	select {
 	case <-chanDone:
 	case <-time.After(1 * time.Second):
-		env.t.Error("attachment of faucet message took too long")
+		env.t.Error("attachment of faucet block took too long")
 	}
 
 	return tips, nil
 }
 
-// RequestFunds sends requests to the faucet and waits until the next faucet message is issued.
+// RequestFunds sends requests to the faucet and waits until the next faucet block is issued.
 func (env *FaucetTestEnv) RequestFunds(wallets ...*utils.HDWallet) (hornet.MessageIDs, error) {
 
 	require.Greater(env.t, len(wallets), 0)
@@ -426,7 +426,7 @@ func (env *FaucetTestEnv) RequestFunds(wallets ...*utils.HDWallet) (hornet.Messa
 	return tips, nil
 }
 
-// RequestFundsAndIssueMilestone sends requests to the faucet, waits until the next faucet message is issued and
+// RequestFundsAndIssueMilestone sends requests to the faucet, waits until the next faucet block is issued and
 // issues a milestone on top of it.
 func (env *FaucetTestEnv) RequestFundsAndIssueMilestone(wallets ...*utils.HDWallet) error {
 
@@ -440,9 +440,9 @@ func (env *FaucetTestEnv) RequestFundsAndIssueMilestone(wallets ...*utils.HDWall
 	return nil
 }
 
-// FlushRequestsAndConfirmNewFaucetMessage flushes pending faucet requests, waits until the next faucet message is issued and
+// FlushRequestsAndConfirmNewFaucetBlock flushes pending faucet requests, waits until the next faucet block is issued and
 // issues a milestone on top of it.
-func (env *FaucetTestEnv) FlushRequestsAndConfirmNewFaucetMessage() error {
+func (env *FaucetTestEnv) FlushRequestsAndConfirmNewFaucetBlock() error {
 
 	tips, err := env.processFaucetRequests(nil)
 	if err != nil {
