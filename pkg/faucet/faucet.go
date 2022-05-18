@@ -11,7 +11,6 @@ import (
 
 	"github.com/gohornet/hornet/pkg/common"
 	"github.com/gohornet/hornet/pkg/restapi"
-	"github.com/gohornet/hornet/pkg/utils"
 	"github.com/iotaledger/hive.go/daemon"
 	"github.com/iotaledger/hive.go/events"
 	"github.com/iotaledger/hive.go/logger"
@@ -23,19 +22,19 @@ import (
 // IsNodeSyncedFunc is a function to query if the used node is synced.
 type IsNodeSyncedFunc = func() bool
 
-// SendMessageFunc is a function which sends a message to the network.
-type SendMessageFunc = func(ctx context.Context, msg *iotago.Message) (iotago.MessageID, error)
+// SendBlockFunc is a function which sends a block to the network.
+type SendBlockFunc = func(ctx context.Context, block *iotago.Block) (iotago.BlockID, error)
 
-// Metadata contains the basic message metadata required by the faucet.
+// Metadata contains the basic block metadata required by the faucet.
 type Metadata struct {
 	IsReferenced   bool
 	IsConflicting  bool
 	ShouldReattach bool
 }
 
-// MessageMetadataFunc is a function to fetch the required metadata for a given message ID.
-// This should return nil if the message is not found.
-type MessageMetadataFunc = func(ctx context.Context, messageID iotago.MessageID) (*Metadata, error)
+// BlockMetadataFunc is a function to fetch the required metadata for a given block ID.
+// This should return nil if the block is not found.
+type BlockMetadataFunc = func(ctx context.Context, blockID iotago.BlockID) (*Metadata, error)
 
 type UTXOOutput struct {
 	OutputID iotago.OutputID
@@ -51,8 +50,8 @@ var (
 
 // Events are the events issued by the faucet.
 type Events struct {
-	// Fired when a faucet message is issued.
-	IssuedMessage *events.Event
+	// Fired when a faucet block is issued.
+	IssuedBlock *events.Event
 	// SoftError is triggered when a soft error is encountered.
 	SoftError *events.Event
 }
@@ -66,9 +65,9 @@ type queueItem struct {
 
 // pendingTransaction holds info about a sent transaction that is pending.
 type pendingTransaction struct {
-	MessageID      iotago.MessageID
+	BlockID        iotago.BlockID
 	QueuedItems    []*queueItem
-	ConsumedInputs []iotago.OutputID
+	ConsumedInputs iotago.OutputIDs
 	TransactionID  iotago.TransactionID
 }
 
@@ -97,14 +96,14 @@ type Faucet struct {
 	// lock used to secure the state of the faucet.
 	syncutils.Mutex
 	// the logger used to log events.
-	*utils.WrappedLogger
+	*logger.WrappedLogger
 	// the context passed to run the runloop on
 	runloopCtx context.Context
 
 	// used to access the global daemon.
 	daemon daemon.Daemon
-	// used to access metadata of a message from the node.
-	messageMetadataFunc MessageMetadataFunc
+	// used to access metadata of a block from the node.
+	blockMetadataFunc BlockMetadataFunc
 	// used to collect unspent outputs for a given address.
 	collectOutputsFunc BasicOutputsForAddressFunc
 	// used to determine the sync status of the node.
@@ -115,8 +114,8 @@ type Faucet struct {
 	address iotago.Address
 	// used to sign the faucet transactions.
 	addressSigner iotago.AddressSigner
-	// the function used to send a message.
-	sendMessageFunc SendMessageFunc
+	// the function used to send a block.
+	sendBlockFunc SendBlockFunc
 	// holds the faucet options.
 	opts *Options
 
@@ -133,8 +132,8 @@ type Faucet struct {
 	flushQueue chan struct{}
 	// pendingTransactionsMap is a map of sent transactions that are pending.
 	pendingTransactionsMap map[string]*pendingTransaction
-	// the message ID of the last sent faucet message.
-	lastMessageID *iotago.MessageID
+	// the block ID of the last sent faucet block.
+	lastBlockID *iotago.BlockID
 	// the latest unused UTXO output that may not be confirmed yet but can be reused in new transactions.
 	// this is used to issue multiple transactions without waiting for the confirmation by milestones.
 	lastRemainderOutput *UTXOOutput
@@ -208,7 +207,7 @@ func WithMaxAddressBalance(maxAddressBalance uint64) Option {
 	}
 }
 
-// WithMaxOutputCount defines the maximum output count per faucet message.
+// WithMaxOutputCount defines the maximum output count per faucet block.
 func WithMaxOutputCount(maxOutputCount int) Option {
 	return func(opts *Options) {
 		if maxOutputCount > iotago.MaxOutputsCount {
@@ -238,20 +237,20 @@ func WithBatchTimeout(timeout time.Duration) Option {
 // Option is a function setting a faucet option.
 type Option func(opts *Options)
 
-func MessageIDCaller(handler interface{}, params ...interface{}) {
-	handler.(func(mesageID iotago.MessageID))(params[0].(iotago.MessageID))
+func BlockIDCaller(handler interface{}, params ...interface{}) {
+	handler.(func(blockID iotago.BlockID))(params[0].(iotago.BlockID))
 }
 
 // New creates a new faucet instance.
 func New(
 	daemon daemon.Daemon,
-	messageMetadataFunc MessageMetadataFunc,
+	blockMetadataFunc BlockMetadataFunc,
 	collectOutputsFunc BasicOutputsForAddressFunc,
 	nodeSyncedFunc IsNodeSyncedFunc,
 	protoParas *iotago.ProtocolParameters,
 	address iotago.Address,
 	addressSigner iotago.AddressSigner,
-	sendMessageFunc SendMessageFunc,
+	sendBlockFunc SendBlockFunc,
 	opts ...Option) *Faucet {
 
 	options := &Options{}
@@ -259,22 +258,22 @@ func New(
 	options.apply(opts...)
 
 	faucet := &Faucet{
-		daemon:              daemon,
-		messageMetadataFunc: messageMetadataFunc,
-		collectOutputsFunc:  collectOutputsFunc,
-		nodeSyncedFunc:      nodeSyncedFunc,
-		protoParas:          protoParas,
-		address:             address,
-		addressSigner:       addressSigner,
-		sendMessageFunc:     sendMessageFunc,
-		opts:                options,
+		daemon:             daemon,
+		blockMetadataFunc:  blockMetadataFunc,
+		collectOutputsFunc: collectOutputsFunc,
+		nodeSyncedFunc:     nodeSyncedFunc,
+		protoParas:         protoParas,
+		address:            address,
+		addressSigner:      addressSigner,
+		sendBlockFunc:      sendBlockFunc,
+		opts:               options,
 
 		Events: &Events{
-			IssuedMessage: events.NewEvent(MessageIDCaller),
-			SoftError:     events.NewEvent(events.ErrorCaller),
+			IssuedBlock: events.NewEvent(BlockIDCaller),
+			SoftError:   events.NewEvent(events.ErrorCaller),
 		},
 	}
-	faucet.WrappedLogger = utils.NewWrappedLogger(options.logger)
+	faucet.WrappedLogger = logger.NewWrappedLogger(options.logger)
 	faucet.init()
 
 	return faucet
@@ -286,7 +285,7 @@ func (f *Faucet) init() {
 	f.queueMap = make(map[string]*queueItem)
 	f.flushQueue = make(chan struct{})
 	f.pendingTransactionsMap = make(map[string]*pendingTransaction)
-	f.lastMessageID = nil
+	f.lastBlockID = nil
 	f.lastRemainderOutput = nil
 }
 
@@ -426,29 +425,29 @@ func (f *Faucet) readdRequestsWithoutLocking(batchedRequests []*queueItem) {
 // addPendingTransactionWithoutLocking tracks a pending transaction.
 // write lock must be acquired outside.
 func (f *Faucet) addPendingTransactionWithoutLocking(pending *pendingTransaction) {
-	f.pendingTransactionsMap[string(pending.MessageID[:])] = pending
+	f.pendingTransactionsMap[string(pending.BlockID[:])] = pending
 }
 
 // clearPendingTransactionWithoutLocking removes tracking of a pending transaction.
 // write lock must be acquired outside.
-func (f *Faucet) clearPendingTransactionWithoutLocking(msgID iotago.MessageID) {
-	delete(f.pendingTransactionsMap, string(msgID[:]))
+func (f *Faucet) clearPendingTransactionWithoutLocking(blockID iotago.BlockID) {
+	delete(f.pendingTransactionsMap, string(blockID[:]))
 }
 
-// createMessage creates a new message and references the last faucet message.
-func (f *Faucet) createMessage(txPayload iotago.Payload, tip ...iotago.MessageID) (*iotago.Message, error) {
+// createBlock creates a new block and references the last faucet block.
+func (f *Faucet) createBlock(txPayload iotago.Payload, tip ...iotago.BlockID) (*iotago.Block, error) {
 
-	tips := iotago.MessageIDs{}
+	tips := iotago.BlockIDs{}
 	if len(tip) > 0 {
 		// if a tip was passed, use that one
 		tips = append(tips, tip[0])
 	}
 
-	return builder.NewMessageBuilder(f.protoParas.Version).ParentsMessageIDs(tips).Payload(txPayload).Build()
+	return builder.NewBlockBuilder(f.protoParas.Version).ParentsBlockIDs(tips).Payload(txPayload).Build()
 }
 
 // buildTransactionPayload creates a signed transaction payload with all UTXO and batched requests.
-func (f *Faucet) buildTransactionPayload(unspentOutputs []UTXOOutput, batchedRequests []*queueItem) (*iotago.Transaction, *iotago.TransactionID, []iotago.OutputID, *iotago.UTXOInput, uint64, error) {
+func (f *Faucet) buildTransactionPayload(unspentOutputs []UTXOOutput, batchedRequests []*queueItem) (*iotago.Transaction, iotago.TransactionID, iotago.OutputIDs, *iotago.UTXOInput, uint64, error) {
 
 	txBuilder := builder.NewTransactionBuilder(f.protoParas.NetworkID())
 	txBuilder.AddTaggedDataPayload(&iotago.TaggedData{Tag: f.opts.tagMessage, Data: nil})
@@ -506,12 +505,12 @@ func (f *Faucet) buildTransactionPayload(unspentOutputs []UTXOOutput, batchedReq
 
 	txPayload, err := txBuilder.Build(f.protoParas, f.addressSigner)
 	if err != nil {
-		return nil, nil, nil, nil, 0, err
+		return nil, iotago.TransactionID{}, nil, nil, 0, err
 	}
 
 	transactionID, err := txPayload.ID()
 	if err != nil {
-		return nil, nil, nil, nil, 0, fmt.Errorf("can't compute the transaction ID, error: %w", err)
+		return nil, iotago.TransactionID{}, nil, nil, 0, fmt.Errorf("can't compute the transaction ID, error: %w", err)
 	}
 
 	if remainderAmount == 0 {
@@ -527,11 +526,7 @@ func (f *Faucet) buildTransactionPayload(unspentOutputs []UTXOOutput, batchedReq
 	var outputIndex uint16 = 0
 	for _, output := range txPayload.Essence.Outputs {
 		basicOutput := output.(*iotago.BasicOutput)
-		conditions, err := basicOutput.UnlockConditions().Set()
-		if err != nil {
-			return nil, nil, nil, nil, 0, err
-		}
-		addr := conditions.Address().Address
+		addr := basicOutput.UnlockConditionsSet().Address().Address
 
 		if f.address.Equal(addr) {
 			// found the remainder address in the outputs
@@ -543,37 +538,37 @@ func (f *Faucet) buildTransactionPayload(unspentOutputs []UTXOOutput, batchedReq
 	}
 
 	if !found {
-		return nil, nil, nil, nil, 0, errors.New("can't find the faucet remainder output")
+		return nil, iotago.TransactionID{}, nil, nil, 0, errors.New("can't find the faucet remainder output")
 	}
 
 	return txPayload, transactionID, consumedInputs, remainderOutput, uint64(remainderAmount), nil
 }
 
-// sendFaucetMessage creates a faucet transaction payload and remembers the last sent messageID and the lastRemainderOutput.
-func (f *Faucet) sendFaucetMessage(ctx context.Context, unspentOutputs []UTXOOutput, batchedRequests []*queueItem, tip ...iotago.MessageID) error {
+// sendFaucetBlock creates a faucet transaction payload and remembers the last sent blockID and the lastRemainderOutput.
+func (f *Faucet) sendFaucetBlock(ctx context.Context, unspentOutputs []UTXOOutput, batchedRequests []*queueItem, tip ...iotago.BlockID) error {
 
 	txPayload, transactionID, consumedInputs, remainderIotaGoOutput, remainderAmount, err := f.buildTransactionPayload(unspentOutputs, batchedRequests)
 	if err != nil {
 		return fmt.Errorf("build transaction payload failed, error: %w", err)
 	}
 
-	msg, err := f.createMessage(txPayload, tip...)
+	block, err := f.createBlock(txPayload, tip...)
 	if err != nil {
-		return fmt.Errorf("build faucet message failed, error: %w", err)
+		return fmt.Errorf("build faucet block failed, error: %w", err)
 	}
 
-	messageID, err := f.sendMessageFunc(ctx, msg)
+	blockID, err := f.sendBlockFunc(ctx, block)
 	if err != nil {
-		return fmt.Errorf("send faucet message failed, error: %w", err)
+		return fmt.Errorf("send faucet block failed, error: %w", err)
 	}
 
 	f.Lock()
-	f.lastMessageID = &messageID
+	f.lastBlockID = &blockID
 	f.addPendingTransactionWithoutLocking(&pendingTransaction{
-		MessageID:      messageID,
+		BlockID:        blockID,
 		QueuedItems:    batchedRequests,
 		ConsumedInputs: consumedInputs,
-		TransactionID:  *transactionID,
+		TransactionID:  transactionID,
 	})
 
 	if remainderIotaGoOutput != nil {
@@ -594,7 +589,7 @@ func (f *Faucet) sendFaucetMessage(ctx context.Context, unspentOutputs []UTXOOut
 	}
 	f.Unlock()
 
-	f.Events.IssuedMessage.Trigger(messageID)
+	f.Events.IssuedBlock.Trigger(blockID)
 
 	return nil
 }
@@ -736,7 +731,7 @@ func (f *Faucet) RunFaucetLoop(ctx context.Context, initDoneCallback func()) err
 				return f.collectUnspentBasicOutputsWithoutConstraints(ctx, f.address)
 			}
 
-			processRequests := func() ([]UTXOOutput, []*queueItem, iotago.MessageIDs, error) {
+			processRequests := func() ([]UTXOOutput, []*queueItem, iotago.BlockIDs, error) {
 				// there must be a lock between collectUnspentOutputsWithoutLocking and "tipselection", otherwise the chaining may fail
 				f.Lock()
 				defer f.Unlock()
@@ -751,11 +746,11 @@ func (f *Faucet) RunFaucetLoop(ctx context.Context, initDoneCallback func()) err
 					return nil, nil, nil, ErrNothingToProcess
 				}
 
-				// if a lastMessageID exists, we need to reference it to chain the transactions in the correct order for whiteflag.
-				// lastMessageID is reset by ApplyConfirmation in case the last faucet message is not confirmed and below max depth.
-				var tips iotago.MessageIDs
-				if f.lastMessageID != nil {
-					tips = append(tips, *f.lastMessageID)
+				// if a lastBlockID exists, we need to reference it to chain the transactions in the correct order for whiteflag.
+				// lastBlockID is reset by ApplyConfirmation in case the last faucet block is not confirmed and below max depth.
+				var tips iotago.BlockIDs
+				if f.lastBlockID != nil {
+					tips = append(tips, *f.lastBlockID)
 				}
 
 				processableRequests := f.processRequestsWithoutLocking(len(unspentOutputs), amount, batchedRequests)
@@ -776,7 +771,7 @@ func (f *Faucet) RunFaucetLoop(ctx context.Context, initDoneCallback func()) err
 				continue
 			}
 
-			if err := f.sendFaucetMessage(ctx, unspentOutputs, processableRequests, tips...); err != nil {
+			if err := f.sendFaucetBlock(ctx, unspentOutputs, processableRequests, tips...); err != nil {
 				if common.IsCriticalError(err) != nil {
 					// error is a critical error
 					// => stop the faucet
@@ -845,36 +840,36 @@ func (f *Faucet) ApplyNewLedgerUpdate(createdOutputs iotago.OutputIDs, consumedO
 				// transaction was conflicting => readd the items to the queue and delete the pending transaction
 				conflicting = true
 				f.readdRequestsWithoutLocking(pendingTx.QueuedItems)
-				f.clearPendingTransactionWithoutLocking(pendingTx.MessageID)
+				f.clearPendingTransactionWithoutLocking(pendingTx.BlockID)
 			} else {
 				// transaction was confirmed => delete the requests and the pending transaction
 				f.clearRequestsWithoutLocking(pendingTx.QueuedItems)
-				f.clearPendingTransactionWithoutLocking(pendingTx.MessageID)
+				f.clearPendingTransactionWithoutLocking(pendingTx.BlockID)
 
-				if f.lastMessageID != nil && bytes.Equal(f.lastMessageID[:], pendingTx.MessageID[:]) {
-					// the latest message got confirmed, reset the lastMessageID
-					f.lastMessageID = nil
+				if f.lastBlockID != nil && bytes.Equal(f.lastBlockID[:], pendingTx.BlockID[:]) {
+					// the latest block got confirmed, reset the lastBlockID
+					f.lastBlockID = nil
 				}
 			}
 		}
 	}
 
-	checkPendingMessageMetadata := func(pendingTx *pendingTransaction) {
-		msgID := pendingTx.MessageID
+	checkPendingBlockMetadata := func(pendingTx *pendingTransaction) {
+		blockID := pendingTx.BlockID
 
-		metadata, err := f.messageMetadataFunc(f.runloopCtx, msgID)
+		metadata, err := f.blockMetadataFunc(f.runloopCtx, blockID)
 		if err != nil {
 			// an error occurred => re-add the items to the queue and delete the pending transaction
 			conflicting = true
 			f.readdRequestsWithoutLocking(pendingTx.QueuedItems)
-			f.clearPendingTransactionWithoutLocking(msgID)
+			f.clearPendingTransactionWithoutLocking(blockID)
 			return
 		}
 		if metadata == nil {
-			// message unknown => delete the requests and the pending transaction
+			// block unknown => delete the requests and the pending transaction
 			conflicting = true
 			f.clearRequestsWithoutLocking(pendingTx.QueuedItems)
-			f.clearPendingTransactionWithoutLocking(msgID)
+			f.clearPendingTransactionWithoutLocking(blockID)
 			return
 		}
 
@@ -883,13 +878,13 @@ func (f *Faucet) ApplyNewLedgerUpdate(createdOutputs iotago.OutputIDs, consumedO
 				// transaction was conflicting => re-add the items to the queue and delete the pending transaction
 				conflicting = true
 				f.readdRequestsWithoutLocking(pendingTx.QueuedItems)
-				f.clearPendingTransactionWithoutLocking(msgID)
+				f.clearPendingTransactionWithoutLocking(blockID)
 				return
 			}
 
 			// transaction was confirmed => delete the requests and the pending transaction
 			f.clearRequestsWithoutLocking(pendingTx.QueuedItems)
-			f.clearPendingTransactionWithoutLocking(msgID)
+			f.clearPendingTransactionWithoutLocking(blockID)
 			return
 		}
 
@@ -897,24 +892,24 @@ func (f *Faucet) ApplyNewLedgerUpdate(createdOutputs iotago.OutputIDs, consumedO
 			// below max depth => re-add the items to the queue and delete the pending transaction
 			conflicting = true
 			f.readdRequestsWithoutLocking(pendingTx.QueuedItems)
-			f.clearPendingTransactionWithoutLocking(msgID)
+			f.clearPendingTransactionWithoutLocking(blockID)
 		}
 	}
 
 	// check all remaining pending transactions
 	for _, pendingTx := range f.pendingTransactionsMap {
-		checkPendingMessageMetadata(pendingTx)
+		checkPendingBlockMetadata(pendingTx)
 	}
 
 	if conflicting {
 		// there was a conflict in the chain
-		// => reset the lastMessageID and lastRemainderOutput to collect outputs and reissue all pending transactions
-		f.lastMessageID = nil
+		// => reset the lastBlockID and lastRemainderOutput to collect outputs and reissue all pending transactions
+		f.lastBlockID = nil
 		f.lastRemainderOutput = nil
 
 		for _, pendingTx := range f.pendingTransactionsMap {
 			f.readdRequestsWithoutLocking(pendingTx.QueuedItems)
-			f.clearPendingTransactionWithoutLocking(pendingTx.MessageID)
+			f.clearPendingTransactionWithoutLocking(pendingTx.BlockID)
 		}
 	}
 

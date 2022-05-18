@@ -7,7 +7,10 @@ import (
 	"time"
 
 	grpc_retry "github.com/grpc-ecosystem/go-grpc-middleware/retry"
+	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 
 	"github.com/iotaledger/hive.go/events"
@@ -30,13 +33,13 @@ type NodeBridge struct {
 }
 
 type Events struct {
-	MessageSolid              *events.Event
+	BlockSolid                *events.Event
 	ConfirmedMilestoneChanged *events.Event
 	LedgerUpdated             *events.Event
 }
 
-func INXMessageMetadataCaller(handler interface{}, params ...interface{}) {
-	handler.(func(metadata *inx.MessageMetadata))(params[0].(*inx.MessageMetadata))
+func INXBlockMetadataCaller(handler interface{}, params ...interface{}) {
+	handler.(func(metadata *inx.BlockMetadata))(params[0].(*inx.BlockMetadata))
 }
 
 func INXMilestoneCaller(handler interface{}, params ...interface{}) {
@@ -47,13 +50,21 @@ func INXLedgerUpdateCaller(handler interface{}, params ...interface{}) {
 	handler.(func(update *inx.LedgerUpdate))(params[0].(*inx.LedgerUpdate))
 }
 
-func NewNodeBridge(ctx context.Context, client inx.INXClient, logger *logger.Logger) (*NodeBridge, error) {
-	logger.Info("Connecting to node and reading protocol parameters...")
-
+func NewNodeBridge(ctx context.Context, address string, logger *logger.Logger) (*NodeBridge, error) {
+	conn, err := grpc.Dial(address,
+		grpc.WithChainUnaryInterceptor(grpc_retry.UnaryClientInterceptor(), grpc_prometheus.UnaryClientInterceptor),
+		grpc.WithStreamInterceptor(grpc_prometheus.StreamClientInterceptor),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	)
+	if err != nil {
+		return nil, err
+	}
+	client := inx.NewINXClient(conn)
 	retryBackoff := func(_ uint) time.Duration {
 		return 1 * time.Second
 	}
 
+	logger.Info("Connecting to node and reading protocol parameters...")
 	nodeConfig, err := client.ReadNodeConfiguration(ctx, &inx.NoParams{}, grpc_retry.WithMax(5), grpc_retry.WithBackoff(retryBackoff))
 	if err != nil {
 		return nil, err
@@ -70,7 +81,7 @@ func NewNodeBridge(ctx context.Context, client inx.INXClient, logger *logger.Log
 		NodeConfig:     nodeConfig,
 		TangleListener: newTangleListener(),
 		Events: &Events{
-			MessageSolid:              events.NewEvent(INXMessageMetadataCaller),
+			BlockSolid:                events.NewEvent(INXBlockMetadataCaller),
 			ConfirmedMilestoneChanged: events.NewEvent(INXMilestoneCaller),
 			LedgerUpdated:             events.NewEvent(INXLedgerUpdateCaller),
 		},
@@ -84,7 +95,7 @@ func (n *NodeBridge) Run(ctx context.Context) {
 	defer cancel()
 	go n.listenToConfirmedMilestone(c, cancel)
 	go n.listenToLatestMilestone(c, cancel)
-	go n.listenToSolidMessages(c, cancel)
+	go n.listenToSolidBlocks(c, cancel)
 	go n.listenToLedgerUpdates(c, cancel)
 	<-c.Done()
 }
@@ -100,16 +111,16 @@ func (n *NodeBridge) IsNodeSynced() bool {
 	return n.latestMilestone.GetMilestoneIndex() == n.confirmedMilestone.GetMilestoneIndex()
 }
 
-func (n *NodeBridge) EmitMessage(ctx context.Context, message *iotago.Message) (iotago.MessageID, error) {
+func (n *NodeBridge) SubmitBlock(ctx context.Context, block *iotago.Block) (iotago.BlockID, error) {
 
-	msg, err := inx.WrapMessage(message)
+	blk, err := inx.WrapBlock(block)
 	if err != nil {
-		return iotago.MessageID{}, err
+		return iotago.BlockID{}, err
 	}
 
-	response, err := n.Client.SubmitMessage(ctx, msg)
+	response, err := n.Client.SubmitBlock(ctx, blk)
 	if err != nil {
-		return iotago.MessageID{}, err
+		return iotago.BlockID{}, err
 	}
 
 	return response.Unwrap(), nil
@@ -119,30 +130,30 @@ func (n *NodeBridge) INXNodeClient() *nodeclient.Client {
 	return inx.NewNodeclientOverINX(n.Client)
 }
 
-func (n *NodeBridge) MessageMetadata(ctx context.Context, messageID iotago.MessageID) (*inx.MessageMetadata, error) {
-	return n.Client.ReadMessageMetadata(ctx, inx.NewMessageId(messageID))
+func (n *NodeBridge) BlockMetadata(ctx context.Context, blockID iotago.BlockID) (*inx.BlockMetadata, error) {
+	return n.Client.ReadBlockMetadata(ctx, inx.NewBlockId(blockID))
 }
 
-func (n *NodeBridge) listenToSolidMessages(ctx context.Context, cancel context.CancelFunc) error {
+func (n *NodeBridge) listenToSolidBlocks(ctx context.Context, cancel context.CancelFunc) error {
 	defer cancel()
-	filter := &inx.MessageFilter{}
-	stream, err := n.Client.ListenToSolidMessages(ctx, filter)
+	filter := &inx.BlockFilter{}
+	stream, err := n.Client.ListenToSolidBlocks(ctx, filter)
 	if err != nil {
 		return err
 	}
 	for {
-		messageMetadata, err := stream.Recv()
+		metadata, err := stream.Recv()
 		if err != nil {
 			if err == io.EOF || status.Code(err) == codes.Canceled {
 				break
 			}
-			n.Logger.Errorf("listenToSolidMessages: %s", err.Error())
+			n.Logger.Errorf("listenToSolidBlocks: %s", err.Error())
 			break
 		}
 		if ctx.Err() != nil {
 			break
 		}
-		n.processSolidMessage(messageMetadata)
+		n.processSolidBlock(metadata)
 	}
 	return nil
 }
@@ -216,9 +227,9 @@ func (n *NodeBridge) listenToLedgerUpdates(ctx context.Context, cancel context.C
 	return nil
 }
 
-func (n *NodeBridge) processSolidMessage(metadata *inx.MessageMetadata) {
-	n.TangleListener.processSolidMessage(metadata)
-	n.Events.MessageSolid.Trigger(metadata)
+func (n *NodeBridge) processSolidBlock(metadata *inx.BlockMetadata) {
+	n.TangleListener.processSolidBlock(metadata)
+	n.Events.BlockSolid.Trigger(metadata)
 }
 
 func (n *NodeBridge) processLatestMilestone(ms *inx.Milestone) {

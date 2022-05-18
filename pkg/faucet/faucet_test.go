@@ -6,9 +6,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/gohornet/hornet/pkg/model/hornet"
 	"github.com/gohornet/hornet/pkg/model/milestone"
 	"github.com/gohornet/inx-faucet/pkg/faucet/test"
+	iotago "github.com/iotaledger/iota.go/v3"
 )
 
 func TestSingleRequest(t *testing.T) {
@@ -109,7 +109,7 @@ func TestMultipleRequests(t *testing.T) {
 	env.TestEnv.AssertLedgerBalance(env.Wallet2, wallet2Balance)
 	env.TestEnv.AssertLedgerBalance(env.Wallet3, wallet3Balance)
 
-	// multiple target addresses in single messages
+	// multiple target addresses in single blocks
 	tips1, err := env.RequestFunds(env.Wallet1)
 	require.NoError(t, err)
 
@@ -119,7 +119,7 @@ func TestMultipleRequests(t *testing.T) {
 	tips3, err := env.RequestFunds(env.Wallet3)
 	require.NoError(t, err)
 
-	var tips hornet.MessageIDs
+	var tips iotago.BlockIDs
 	tips = append(tips, tips1...)
 	tips = append(tips, tips2...)
 	tips = append(tips, tips3...)
@@ -145,7 +145,7 @@ func TestMultipleRequests(t *testing.T) {
 
 	// small amount
 	for calculatedWallet1Balance < faucetMaxAddressBalance {
-		// multiple target addresses in one message
+		// multiple target addresses in one block
 		err = env.RequestFundsAndIssueMilestone(env.Wallet1, env.Wallet2, env.Wallet3)
 		require.NoError(t, err)
 
@@ -201,8 +201,8 @@ func TestDoubleSpent(t *testing.T) {
 	env.TestEnv.AssertLedgerBalance(env.Wallet2, wallet2Balance)
 	env.TestEnv.AssertLedgerBalance(env.Wallet3, wallet3Balance)
 
-	// create a conflicting transaction that gets confirmed instead of the faucet message
-	message := env.TestEnv.NewMessageBuilder().
+	// create a conflicting transaction that gets confirmed instead of the faucet block
+	block := env.TestEnv.NewBlockBuilder().
 		LatestMilestoneAsParents().
 		FromWallet(env.FaucetWallet).
 		ToWallet(env.GenesisWallet).
@@ -211,12 +211,12 @@ func TestDoubleSpent(t *testing.T) {
 		Store().
 		BookOnWallets()
 
-	// create the conflicting message in the faucet
+	// create the conflicting block in the faucet
 	tips, err := env.RequestFunds(env.Wallet1)
 	require.NoError(t, err)
 
-	// Confirming milestone at message
-	_, _ = env.IssueMilestone(message.StoredMessageID())
+	// Confirming milestone at block
+	_, _ = env.IssueMilestone(block.StoredBlockID())
 
 	genesisBalance += faucetAmount
 	faucetBalance -= faucetAmount                         // we stole some funds from the faucet
@@ -224,14 +224,14 @@ func TestDoubleSpent(t *testing.T) {
 	env.TestEnv.AssertLedgerBalance(env.GenesisWallet, genesisBalance)
 	env.TestEnv.AssertLedgerBalance(env.FaucetWallet, faucetBalance)
 
-	// Confirming milestone at message (double spent)
+	// Confirming milestone at block (double spent)
 	_, _ = env.IssueMilestone(tips...)
 
 	env.AssertFaucetBalance(faucetBalance - faucetAmount) // request is still pending
 	env.TestEnv.AssertLedgerBalance(env.GenesisWallet, genesisBalance)
 	env.TestEnv.AssertLedgerBalance(env.FaucetWallet, faucetBalance)
 
-	err = env.FlushRequestsAndConfirmNewFaucetMessage()
+	err = env.FlushRequestsAndConfirmNewFaucetBlock()
 	require.NoError(t, err)
 
 	faucetBalance -= faucetAmount // now the request is booked
@@ -243,7 +243,7 @@ func TestDoubleSpent(t *testing.T) {
 }
 
 func TestBelowMaxDepth(t *testing.T) {
-	// faucet message is below max depth and never confirmed
+	// faucet block is below max depth and never confirmed
 
 	var faucetBalance uint64 = 1_000_000_000        //  1 Gi
 	var wallet1Balance uint64 = 0                   //  0  i
@@ -282,9 +282,9 @@ func TestBelowMaxDepth(t *testing.T) {
 	_, err := env.RequestFunds(env.Wallet1)
 	require.NoError(t, err)
 
-	// issue several milestones, so that the faucet message gets below max depth.
+	// issue several milestones, so that the faucet block gets below max depth.
 	// hint: we need to issue BelowMaxDepth+1 milestones, because we use the
-	// LastMilestoneMessageID as a tip for the faucet, but the milestone message
+	// LastMilestoneBlockID as a tip for the faucet, but the milestone block
 	// itself is part of the future cone, so it needs to be BMD+1 milestones
 	// to become below max depth.
 	for i := 0; i <= test.BelowMaxDepth+1; i++ {
@@ -294,8 +294,8 @@ func TestBelowMaxDepth(t *testing.T) {
 	env.TestEnv.AssertLedgerBalance(env.FaucetWallet, faucetBalance)
 	env.TestEnv.AssertLedgerBalance(env.Wallet1, wallet1Balance)
 
-	// flushing requests should reissue the requests that were in the below max depth message
-	err = env.FlushRequestsAndConfirmNewFaucetMessage()
+	// flushing requests should reissue the requests that were in the below max depth block
+	err = env.FlushRequestsAndConfirmNewFaucetBlock()
 	require.NoError(t, err)
 
 	calculatedWallet1Balance := wallet1Balance + faucetAmount
@@ -307,8 +307,8 @@ func TestBelowMaxDepth(t *testing.T) {
 }
 
 func TestBelowMaxDepthAfterRequest(t *testing.T) {
-	// first a faucet message is confirmed, but then the old message
-	// was used as a tip for the next faucet message
+	// first a faucet block is confirmed, but then the old block
+	// was used as a tip for the next faucet block
 	// which caused that it is below max depth and never confirmed
 
 	var faucetBalance uint64 = 1_000_000_000        //  1 Gi
@@ -353,9 +353,9 @@ func TestBelowMaxDepthAfterRequest(t *testing.T) {
 	env.TestEnv.AssertLedgerBalance(env.FaucetWallet, faucetBalance)
 	env.TestEnv.AssertLedgerBalance(env.Wallet1, calculatedWallet1Balance)
 
-	// issue several milestones, so that the faucet message gets below max depth.
+	// issue several milestones, so that the faucet block gets below max depth.
 	// hint: we need to issue BelowMaxDepth+1 milestones, because we use the
-	// LastMilestoneMessageID as a tip for the faucet, but the milestone message
+	// LastMilestoneBlockID as a tip for the faucet, but the milestone block
 	// itself is part of the future cone, so it needs to be BMD+1 milestones
 	// to become below max depth.
 	for i := 0; i <= test.BelowMaxDepth+1; i++ {
@@ -476,7 +476,7 @@ func TestCollectFaucetFunds(t *testing.T) {
 	env.TestEnv.AssertLedgerBalance(env.FaucetWallet, faucetBalance)
 	env.TestEnv.AssertLedgerBalance(env.Wallet1, calculatedWallet1Balance)
 
-	message := env.TestEnv.NewMessageBuilder().
+	block := env.TestEnv.NewBlockBuilder().
 		LatestMilestoneAsParents().
 		FromWallet(env.GenesisWallet).
 		ToWallet(env.FaucetWallet).
@@ -485,8 +485,8 @@ func TestCollectFaucetFunds(t *testing.T) {
 		Store().
 		BookOnWallets()
 
-	// Confirming milestone at message
-	_, _ = env.IssueMilestone(message.StoredMessageID())
+	// Confirming milestone at block
+	_, _ = env.IssueMilestone(block.StoredBlockID())
 
 	faucetBalance += faucetAmount
 	env.AssertFaucetBalance(faucetBalance)
@@ -495,7 +495,7 @@ func TestCollectFaucetFunds(t *testing.T) {
 	env.AssertAddressUTXOCount(env.FaucetWallet.Address(), 2)
 
 	// Flushing requests should collect all outputs
-	err = env.FlushRequestsAndConfirmNewFaucetMessage()
+	err = env.FlushRequestsAndConfirmNewFaucetBlock()
 	require.NoError(t, err)
 
 	env.AssertAddressUTXOCount(env.FaucetWallet.Address(), 1)
