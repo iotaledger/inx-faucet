@@ -5,6 +5,8 @@ import (
 	"crypto/ed25519"
 	"fmt"
 	"net/http"
+	"os"
+	"strings"
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
@@ -14,12 +16,12 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/gohornet/hornet/pkg/common"
-	"github.com/gohornet/hornet/pkg/utils"
 	"github.com/gohornet/inx-faucet/pkg/daemon"
 	"github.com/gohornet/inx-faucet/pkg/faucet"
 	"github.com/gohornet/inx-faucet/pkg/nodebridge"
 	"github.com/iotaledger/hive.go/app"
 	"github.com/iotaledger/hive.go/app/core/shutdown"
+	"github.com/iotaledger/hive.go/crypto"
 	"github.com/iotaledger/hive.go/events"
 	inx "github.com/iotaledger/inx/go"
 	iotago "github.com/iotaledger/iota.go/v3"
@@ -56,7 +58,7 @@ type dependencies struct {
 
 func provide(c *dig.Container) error {
 
-	privateKeys, err := utils.LoadEd25519PrivateKeysFromEnvironment("FAUCET_PRV_KEY")
+	privateKeys, err := loadEd25519PrivateKeysFromEnvironment("FAUCET_PRV_KEY")
 	if err != nil {
 		CoreComponent.LogPanicf("loading faucet private key failed, err: %s", err)
 	}
@@ -185,7 +187,7 @@ func run() error {
 	if err := CoreComponent.Daemon().BackgroundWorker("Faucet", func(ctx context.Context) {
 		attachEvents()
 		if err := deps.Faucet.RunFaucetLoop(ctx, nil); err != nil && common.IsCriticalError(err) != nil {
-			deps.ShutdownHandler.SelfShutdown(fmt.Sprintf("faucet plugin hit a critical error: %s", err.Error()))
+			deps.ShutdownHandler.SelfShutdown(fmt.Sprintf("faucet plugin hit a critical error: %s", err.Error()), true)
 		}
 		detachEvents()
 	}, daemon.PriorityStopFaucet); err != nil {
@@ -213,15 +215,15 @@ func configureEvents() {
 
 		createdOutputs := iotago.OutputIDs{}
 		for _, output := range update.GetCreated() {
-			createdOutputs = append(createdOutputs, *output.GetOutputId().Unwrap())
+			createdOutputs = append(createdOutputs, output.GetOutputId().Unwrap())
 		}
 		consumedOutputs := iotago.OutputIDs{}
 		for _, spent := range update.GetConsumed() {
-			consumedOutputs = append(consumedOutputs, *spent.GetOutput().GetOutputId().Unwrap())
+			consumedOutputs = append(consumedOutputs, spent.GetOutput().GetOutputId().Unwrap())
 		}
 
 		if err := deps.Faucet.ApplyNewLedgerUpdate(createdOutputs, consumedOutputs); err != nil {
-			deps.ShutdownHandler.SelfShutdown(fmt.Sprintf("faucet plugin hit a critical error while applying new ledger update: %s", err.Error()))
+			deps.ShutdownHandler.SelfShutdown(fmt.Sprintf("faucet plugin hit a critical error while applying new ledger update: %s", err.Error()), true)
 		}
 	})
 }
@@ -232,4 +234,29 @@ func attachEvents() {
 
 func detachEvents() {
 	deps.NodeBridge.Events.LedgerUpdated.Detach(onLedgerUpdated)
+}
+
+// loadEd25519PrivateKeysFromEnvironment loads ed25519 private keys from the given environment variable.
+func loadEd25519PrivateKeysFromEnvironment(name string) ([]ed25519.PrivateKey, error) {
+
+	keys, exists := os.LookupEnv(name)
+	if !exists {
+		return nil, fmt.Errorf("environment variable '%s' not set", name)
+	}
+
+	if len(keys) == 0 {
+		return nil, fmt.Errorf("environment variable '%s' not set", name)
+	}
+
+	var privateKeys []ed25519.PrivateKey
+	for _, key := range strings.Split(keys, ",") {
+		privateKey, err := crypto.ParseEd25519PrivateKeyFromString(key)
+		if err != nil {
+			return nil, fmt.Errorf("environment variable '%s' contains an invalid private key '%s'", name, key)
+
+		}
+		privateKeys = append(privateKeys, privateKey)
+	}
+
+	return privateKeys, nil
 }

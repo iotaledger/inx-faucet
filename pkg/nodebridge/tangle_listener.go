@@ -2,20 +2,20 @@ package nodebridge
 
 import (
 	"github.com/gohornet/hornet/pkg/model/milestone"
-	"github.com/gohornet/hornet/pkg/utils"
+	"github.com/iotaledger/hive.go/events"
 	inx "github.com/iotaledger/inx/go"
 	iotago "github.com/iotaledger/iota.go/v3"
 )
 
 type TangleListener struct {
-	blockSolidSyncEvent         *utils.SyncEvent
-	milestoneConfirmedSyncEvent *utils.SyncEvent
+	blockSolidSyncEvent         *events.SyncEvent
+	milestoneConfirmedSyncEvent *events.SyncEvent
 }
 
 func newTangleListener() *TangleListener {
 	return &TangleListener{
-		blockSolidSyncEvent:         utils.NewSyncEvent(),
-		milestoneConfirmedSyncEvent: utils.NewSyncEvent(),
+		blockSolidSyncEvent:         events.NewSyncEvent(),
+		milestoneConfirmedSyncEvent: events.NewSyncEvent(),
 	}
 }
 

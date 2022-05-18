@@ -11,7 +11,6 @@ import (
 
 	"github.com/gohornet/hornet/pkg/common"
 	"github.com/gohornet/hornet/pkg/restapi"
-	"github.com/gohornet/hornet/pkg/utils"
 	"github.com/iotaledger/hive.go/daemon"
 	"github.com/iotaledger/hive.go/events"
 	"github.com/iotaledger/hive.go/logger"
@@ -68,7 +67,7 @@ type queueItem struct {
 type pendingTransaction struct {
 	BlockID        iotago.BlockID
 	QueuedItems    []*queueItem
-	ConsumedInputs []iotago.OutputID
+	ConsumedInputs iotago.OutputIDs
 	TransactionID  iotago.TransactionID
 }
 
@@ -97,7 +96,7 @@ type Faucet struct {
 	// lock used to secure the state of the faucet.
 	syncutils.Mutex
 	// the logger used to log events.
-	*utils.WrappedLogger
+	*logger.WrappedLogger
 	// the context passed to run the runloop on
 	runloopCtx context.Context
 
@@ -274,7 +273,7 @@ func New(
 			SoftError:   events.NewEvent(events.ErrorCaller),
 		},
 	}
-	faucet.WrappedLogger = utils.NewWrappedLogger(options.logger)
+	faucet.WrappedLogger = logger.NewWrappedLogger(options.logger)
 	faucet.init()
 
 	return faucet
@@ -448,7 +447,7 @@ func (f *Faucet) createBlock(txPayload iotago.Payload, tip ...iotago.BlockID) (*
 }
 
 // buildTransactionPayload creates a signed transaction payload with all UTXO and batched requests.
-func (f *Faucet) buildTransactionPayload(unspentOutputs []UTXOOutput, batchedRequests []*queueItem) (*iotago.Transaction, *iotago.TransactionID, []iotago.OutputID, *iotago.UTXOInput, uint64, error) {
+func (f *Faucet) buildTransactionPayload(unspentOutputs []UTXOOutput, batchedRequests []*queueItem) (*iotago.Transaction, iotago.TransactionID, iotago.OutputIDs, *iotago.UTXOInput, uint64, error) {
 
 	txBuilder := builder.NewTransactionBuilder(f.protoParas.NetworkID())
 	txBuilder.AddTaggedDataPayload(&iotago.TaggedData{Tag: f.opts.tagMessage, Data: nil})
@@ -506,12 +505,12 @@ func (f *Faucet) buildTransactionPayload(unspentOutputs []UTXOOutput, batchedReq
 
 	txPayload, err := txBuilder.Build(f.protoParas, f.addressSigner)
 	if err != nil {
-		return nil, nil, nil, nil, 0, err
+		return nil, iotago.TransactionID{}, nil, nil, 0, err
 	}
 
 	transactionID, err := txPayload.ID()
 	if err != nil {
-		return nil, nil, nil, nil, 0, fmt.Errorf("can't compute the transaction ID, error: %w", err)
+		return nil, iotago.TransactionID{}, nil, nil, 0, fmt.Errorf("can't compute the transaction ID, error: %w", err)
 	}
 
 	if remainderAmount == 0 {
@@ -527,11 +526,7 @@ func (f *Faucet) buildTransactionPayload(unspentOutputs []UTXOOutput, batchedReq
 	var outputIndex uint16 = 0
 	for _, output := range txPayload.Essence.Outputs {
 		basicOutput := output.(*iotago.BasicOutput)
-		conditions, err := basicOutput.UnlockConditions().Set()
-		if err != nil {
-			return nil, nil, nil, nil, 0, err
-		}
-		addr := conditions.Address().Address
+		addr := basicOutput.UnlockConditionsSet().Address().Address
 
 		if f.address.Equal(addr) {
 			// found the remainder address in the outputs
@@ -543,7 +538,7 @@ func (f *Faucet) buildTransactionPayload(unspentOutputs []UTXOOutput, batchedReq
 	}
 
 	if !found {
-		return nil, nil, nil, nil, 0, errors.New("can't find the faucet remainder output")
+		return nil, iotago.TransactionID{}, nil, nil, 0, errors.New("can't find the faucet remainder output")
 	}
 
 	return txPayload, transactionID, consumedInputs, remainderOutput, uint64(remainderAmount), nil
@@ -573,7 +568,7 @@ func (f *Faucet) sendFaucetBlock(ctx context.Context, unspentOutputs []UTXOOutpu
 		BlockID:        blockID,
 		QueuedItems:    batchedRequests,
 		ConsumedInputs: consumedInputs,
-		TransactionID:  *transactionID,
+		TransactionID:  transactionID,
 	})
 
 	if remainderIotaGoOutput != nil {

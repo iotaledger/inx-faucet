@@ -6,9 +6,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/gohornet/hornet/pkg/model/hornet"
 	"github.com/gohornet/hornet/pkg/model/milestone"
 	"github.com/gohornet/inx-faucet/pkg/faucet/test"
+	iotago "github.com/iotaledger/iota.go/v3"
 )
 
 func TestSingleRequest(t *testing.T) {
@@ -119,7 +119,7 @@ func TestMultipleRequests(t *testing.T) {
 	tips3, err := env.RequestFunds(env.Wallet3)
 	require.NoError(t, err)
 
-	var tips hornet.MessageIDs
+	var tips iotago.BlockIDs
 	tips = append(tips, tips1...)
 	tips = append(tips, tips2...)
 	tips = append(tips, tips3...)
@@ -202,7 +202,7 @@ func TestDoubleSpent(t *testing.T) {
 	env.TestEnv.AssertLedgerBalance(env.Wallet3, wallet3Balance)
 
 	// create a conflicting transaction that gets confirmed instead of the faucet block
-	block := env.TestEnv.NewMessageBuilder().
+	block := env.TestEnv.NewBlockBuilder().
 		LatestMilestoneAsParents().
 		FromWallet(env.FaucetWallet).
 		ToWallet(env.GenesisWallet).
@@ -216,7 +216,7 @@ func TestDoubleSpent(t *testing.T) {
 	require.NoError(t, err)
 
 	// Confirming milestone at block
-	_, _ = env.IssueMilestone(block.StoredMessageID())
+	_, _ = env.IssueMilestone(block.StoredBlockID())
 
 	genesisBalance += faucetAmount
 	faucetBalance -= faucetAmount                         // we stole some funds from the faucet
@@ -476,7 +476,7 @@ func TestCollectFaucetFunds(t *testing.T) {
 	env.TestEnv.AssertLedgerBalance(env.FaucetWallet, faucetBalance)
 	env.TestEnv.AssertLedgerBalance(env.Wallet1, calculatedWallet1Balance)
 
-	block := env.TestEnv.NewMessageBuilder().
+	block := env.TestEnv.NewBlockBuilder().
 		LatestMilestoneAsParents().
 		FromWallet(env.GenesisWallet).
 		ToWallet(env.FaucetWallet).
@@ -486,7 +486,7 @@ func TestCollectFaucetFunds(t *testing.T) {
 		BookOnWallets()
 
 	// Confirming milestone at block
-	_, _ = env.IssueMilestone(block.StoredMessageID())
+	_, _ = env.IssueMilestone(block.StoredBlockID())
 
 	faucetBalance += faucetAmount
 	env.AssertFaucetBalance(faucetBalance)
