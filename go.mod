@@ -3,13 +3,12 @@ module github.com/gohornet/inx-faucet
 go 1.18
 
 require (
-	github.com/gohornet/hornet v1.1.0-rc1.0.20220518090454-ddb9a8f05117
-	github.com/grpc-ecosystem/go-grpc-middleware v1.3.0
-	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0
+	github.com/gohornet/hornet v1.1.0-rc1.0.20220522133459-087a2579df25
+	github.com/gohornet/inx-app v0.0.0-20220523132442-95017a89cb2b
 	github.com/iotaledger/hive.go v0.0.0-20220516114042-6c0ad76bc65f
 	github.com/iotaledger/hive.go/serializer/v2 v2.0.0-20220516114042-6c0ad76bc65f
-	github.com/iotaledger/inx/go v0.0.0-20220519131254-889b984470b4
-	github.com/iotaledger/iota.go/v3 v3.0.0-20220518083125-70b6e37feb4b
+	github.com/iotaledger/inx/go v0.0.0-20220523105438-4e34054d0c13
+	github.com/iotaledger/iota.go/v3 v3.0.0-20220519135423-82921868d5cd
 	github.com/labstack/echo/v4 v4.7.2
 	github.com/pkg/errors v0.9.1
 	github.com/stretchr/testify v1.7.1
@@ -28,7 +27,7 @@ require (
 	github.com/cespare/xxhash/v2 v2.1.2 // indirect
 	github.com/cockroachdb/errors v1.9.0 // indirect
 	github.com/cockroachdb/logtags v0.0.0-20211118104740-dabe8e521a4f // indirect
-	github.com/cockroachdb/pebble v0.0.0-20220517003944-e567fec84c6e // indirect
+	github.com/cockroachdb/pebble v0.0.0-20220519230332-3355a02e7cec // indirect
 	github.com/cockroachdb/redact v1.1.3 // indirect
 	github.com/codahale/hdrhistogram v0.9.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
@@ -49,7 +48,9 @@ require (
 	github.com/google/go-querystring v1.1.0 // indirect
 	github.com/google/uuid v1.3.0 // indirect
 	github.com/gorilla/websocket v1.5.0 // indirect
-	github.com/hashicorp/go-version v1.4.0 // indirect
+	github.com/grpc-ecosystem/go-grpc-middleware v1.3.0 // indirect
+	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0 // indirect
+	github.com/hashicorp/go-version v1.5.0 // indirect
 	github.com/hashicorp/golang-lru v0.5.5-0.20210104140557-80c98217689d // indirect
 	github.com/iotaledger/go-ds-kvstore v0.0.0-20220404122649-445475b91fcf // indirect
 	github.com/iotaledger/iota.go v1.0.0 // indirect
@@ -67,6 +68,7 @@ require (
 	github.com/libp2p/go-libp2p-core v0.15.1 // indirect
 	github.com/libp2p/go-libp2p-peerstore v0.6.0 // indirect
 	github.com/libp2p/go-openssl v0.0.7 // indirect
+	github.com/lucas-clemente/quic-go v0.27.1 // indirect
 	github.com/mattn/go-colorable v0.1.12 // indirect
 	github.com/mattn/go-isatty v0.0.14 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.2-0.20181231171920-c182affec369 // indirect
@@ -109,14 +111,14 @@ require (
 	go.uber.org/multierr v1.8.0 // indirect
 	go.uber.org/zap v1.21.0 // indirect
 	golang.org/x/crypto v0.0.0-20220518034528-6f7dac969898 // indirect
-	golang.org/x/exp v0.0.0-20220516143420-24438e51023a // indirect
-	golang.org/x/net v0.0.0-20220517181318-183a9ca12b87 // indirect
-	golang.org/x/sys v0.0.0-20220517195934-5e4e11fc645e // indirect
+	golang.org/x/exp v0.0.0-20220518171630-0b5c67f07fdf // indirect
+	golang.org/x/net v0.0.0-20220520000938-2e3eb7b945c2 // indirect
+	golang.org/x/sys v0.0.0-20220520151302-bc2c85ada10a // indirect
 	golang.org/x/text v0.3.7 // indirect
 	golang.org/x/xerrors v0.0.0-20220517211312-f3a8303e98df // indirect
-	google.golang.org/genproto v0.0.0-20220518221133-4f43b3371335 // indirect
+	google.golang.org/genproto v0.0.0-20220519153652-3a47de7e79bd // indirect
 	google.golang.org/protobuf v1.28.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
-	gopkg.in/yaml.v3 v3.0.0-20220512140231-539c8e751b99 // indirect
+	gopkg.in/yaml.v3 v3.0.0 // indirect
 	lukechampine.com/blake3 v1.1.7 // indirect
 )

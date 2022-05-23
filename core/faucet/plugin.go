@@ -16,13 +16,12 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/gohornet/hornet/pkg/common"
+	"github.com/gohornet/inx-app/nodebridge"
 	"github.com/gohornet/inx-faucet/pkg/daemon"
 	"github.com/gohornet/inx-faucet/pkg/faucet"
-	"github.com/gohornet/inx-faucet/pkg/nodebridge"
 	"github.com/iotaledger/hive.go/app"
 	"github.com/iotaledger/hive.go/app/core/shutdown"
 	"github.com/iotaledger/hive.go/crypto"
-	"github.com/iotaledger/hive.go/events"
 	inx "github.com/iotaledger/inx/go"
 	iotago "github.com/iotaledger/iota.go/v3"
 	"github.com/iotaledger/iota.go/v3/nodeclient"
@@ -31,12 +30,11 @@ import (
 func init() {
 	CoreComponent = &app.CoreComponent{
 		Component: &app.Component{
-			Name:      "Faucet",
-			DepsFunc:  func(cDeps dependencies) { deps = cDeps },
-			Params:    params,
-			Provide:   provide,
-			Configure: configure,
-			Run:       run,
+			Name:     "Faucet",
+			DepsFunc: func(cDeps dependencies) { deps = cDeps },
+			Params:   params,
+			Provide:  provide,
+			Run:      run,
 		},
 	}
 }
@@ -44,9 +42,6 @@ func init() {
 var (
 	CoreComponent *app.CoreComponent
 	deps          dependencies
-
-	// closures
-	onLedgerUpdated *events.Closure
 )
 
 type dependencies struct {
@@ -86,8 +81,8 @@ func provide(c *dig.Container) error {
 
 	if err := c.Provide(func(deps faucetDeps) *faucet.Faucet {
 
-		fetchMetadata := func(ctx context.Context, blockID iotago.BlockID) (*faucet.Metadata, error) {
-			metadata, err := deps.NodeBridge.BlockMetadata(ctx, blockID)
+		fetchMetadata := func(blockID iotago.BlockID) (*faucet.Metadata, error) {
+			metadata, err := deps.NodeBridge.BlockMetadata(blockID)
 			if err != nil {
 				st, ok := status.FromError(err)
 				if ok && st.Code() == codes.NotFound {
@@ -105,9 +100,9 @@ func provide(c *dig.Container) error {
 		nodeClient := deps.NodeBridge.INXNodeClient()
 		protoParas := deps.NodeBridge.NodeConfig.UnwrapProtocolParameters()
 
-		collectOutputs := func(ctx context.Context, address iotago.Address) ([]faucet.UTXOOutput, error) {
+		collectOutputs := func(address iotago.Address) ([]faucet.UTXOOutput, error) {
 
-			indexer, err := nodeClient.Indexer(ctx)
+			indexer, err := nodeClient.Indexer(context.Background())
 			if err != nil {
 				return nil, err
 			}
@@ -125,7 +120,7 @@ func provide(c *dig.Container) error {
 				},
 			}
 
-			result, err := indexer.Outputs(ctx, query)
+			result, err := indexer.Outputs(context.Background(), query)
 			if err != nil {
 				return nil, err
 			}
@@ -177,19 +172,35 @@ func provide(c *dig.Container) error {
 	return nil
 }
 
-func configure() error {
-	configureEvents()
-	return nil
-}
-
 func run() error {
+
+	// create a background worker that handles the ledger updates
+	CoreComponent.Daemon().BackgroundWorker("Faucet[LedgerUpdates]", func(ctx context.Context) {
+		if err := deps.NodeBridge.ListenToLedgerUpdates(ctx, 0, 0, func(update *inx.LedgerUpdate) error {
+			createdOutputs := iotago.OutputIDs{}
+			for _, output := range update.GetCreated() {
+				createdOutputs = append(createdOutputs, output.GetOutputId().Unwrap())
+			}
+			consumedOutputs := iotago.OutputIDs{}
+			for _, spent := range update.GetConsumed() {
+				consumedOutputs = append(consumedOutputs, spent.GetOutput().GetOutputId().Unwrap())
+			}
+
+			err := deps.Faucet.ApplyNewLedgerUpdate(createdOutputs, consumedOutputs)
+			if err != nil {
+				deps.ShutdownHandler.SelfShutdown(fmt.Sprintf("faucet plugin hit a critical error while applying new ledger update: %s", err.Error()), true)
+			}
+			return err
+		}); err != nil {
+			deps.ShutdownHandler.SelfShutdown(fmt.Sprintf("Listening to LedgerUpdates failed, error: %s", err), false)
+		}
+	}, daemon.PriorityStopFaucetLedgerUpdates)
+
 	// create a background worker that handles the enqueued faucet requests
 	if err := CoreComponent.Daemon().BackgroundWorker("Faucet", func(ctx context.Context) {
-		attachEvents()
 		if err := deps.Faucet.RunFaucetLoop(ctx, nil); err != nil && common.IsCriticalError(err) != nil {
 			deps.ShutdownHandler.SelfShutdown(fmt.Sprintf("faucet plugin hit a critical error: %s", err.Error()), true)
 		}
-		detachEvents()
 	}, daemon.PriorityStopFaucet); err != nil {
 		CoreComponent.LogPanicf("failed to start worker: %s", err)
 	}
@@ -210,35 +221,8 @@ func run() error {
 	return nil
 }
 
-func configureEvents() {
-	onLedgerUpdated = events.NewClosure(func(update *inx.LedgerUpdate) {
-
-		createdOutputs := iotago.OutputIDs{}
-		for _, output := range update.GetCreated() {
-			createdOutputs = append(createdOutputs, output.GetOutputId().Unwrap())
-		}
-		consumedOutputs := iotago.OutputIDs{}
-		for _, spent := range update.GetConsumed() {
-			consumedOutputs = append(consumedOutputs, spent.GetOutput().GetOutputId().Unwrap())
-		}
-
-		if err := deps.Faucet.ApplyNewLedgerUpdate(createdOutputs, consumedOutputs); err != nil {
-			deps.ShutdownHandler.SelfShutdown(fmt.Sprintf("faucet plugin hit a critical error while applying new ledger update: %s", err.Error()), true)
-		}
-	})
-}
-
-func attachEvents() {
-	deps.NodeBridge.Events.LedgerUpdated.Attach(onLedgerUpdated)
-}
-
-func detachEvents() {
-	deps.NodeBridge.Events.LedgerUpdated.Detach(onLedgerUpdated)
-}
-
 // loadEd25519PrivateKeysFromEnvironment loads ed25519 private keys from the given environment variable.
 func loadEd25519PrivateKeysFromEnvironment(name string) ([]ed25519.PrivateKey, error) {
-
 	keys, exists := os.LookupEnv(name)
 	if !exists {
 		return nil, fmt.Errorf("environment variable '%s' not set", name)
@@ -257,6 +241,5 @@ func loadEd25519PrivateKeysFromEnvironment(name string) ([]ed25519.PrivateKey, e
 		}
 		privateKeys = append(privateKeys, privateKey)
 	}
-
 	return privateKeys, nil
 }

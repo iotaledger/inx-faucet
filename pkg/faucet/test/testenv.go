@@ -170,7 +170,7 @@ func NewFaucetTestEnv(t *testing.T,
 	defaultDaemon := daemon.New()
 	defaultDaemon.Start()
 
-	fetchMetadataFunc := func(ctx context.Context, blockID iotago.BlockID) (*faucet.Metadata, error) {
+	fetchMetadataFunc := func(blockID iotago.BlockID) (*faucet.Metadata, error) {
 		metadata := te.Storage().CachedBlockMetadataOrNil(blockID) // meta +1
 		if metadata == nil {
 			return nil, nil
@@ -186,7 +186,7 @@ func NewFaucetTestEnv(t *testing.T,
 		}
 
 		cmi := te.SyncManager().ConfirmedMilestoneIndex()
-		_, ocri, err := dag.ConeRootIndexes(ctx, te.Storage(), metadata.Retain(), cmi) // meta pass +1
+		_, ocri, err := dag.ConeRootIndexes(context.Background(), te.Storage(), metadata.Retain(), cmi) // meta pass +1
 		if err != nil {
 			return nil, err
 		}
@@ -198,7 +198,7 @@ func NewFaucetTestEnv(t *testing.T,
 		}, nil
 	}
 
-	collectOutputsFunc := func(ctx context.Context, address iotago.Address) ([]faucet.UTXOOutput, error) {
+	collectOutputsFunc := func(address iotago.Address) ([]faucet.UTXOOutput, error) {
 		faucetOutputs := []faucet.UTXOOutput{}
 		outputs, err := te.UnspentAddressOutputsWithoutConstraints(address, utxo.ReadLockLedger(false))
 		if err != nil {
