@@ -34,14 +34,14 @@ type Metadata struct {
 
 // BlockMetadataFunc is a function to fetch the required metadata for a given block ID.
 // This should return nil if the block is not found.
-type BlockMetadataFunc = func(ctx context.Context, blockID iotago.BlockID) (*Metadata, error)
+type BlockMetadataFunc = func(blockID iotago.BlockID) (*Metadata, error)
 
 type UTXOOutput struct {
 	OutputID iotago.OutputID
 	Output   *iotago.BasicOutput
 }
 
-type BasicOutputsForAddressFunc = func(ctx context.Context, address iotago.Address) ([]UTXOOutput, error)
+type BasicOutputsForAddressFunc = func(address iotago.Address) ([]UTXOOutput, error)
 
 var (
 	// ErrNothingToProcess is returned when there is no need to sweep or send funds.
@@ -97,8 +97,6 @@ type Faucet struct {
 	syncutils.Mutex
 	// the logger used to log events.
 	*logger.WrappedLogger
-	// the context passed to run the runloop on
-	runloopCtx context.Context
 
 	// used to access the global daemon.
 	daemon daemon.Daemon
@@ -299,9 +297,9 @@ func (f *Faucet) Info() (*FaucetInfoResponse, error) {
 	}, nil
 }
 
-func (f *Faucet) collectUnspentBasicOutputsWithoutConstraints(ctx context.Context, address iotago.Address) ([]UTXOOutput, uint64, error) {
+func (f *Faucet) collectUnspentBasicOutputsWithoutConstraints(address iotago.Address) ([]UTXOOutput, uint64, error) {
 
-	outputs, err := f.collectOutputsFunc(ctx, address)
+	outputs, err := f.collectOutputsFunc(address)
 	if err != err {
 		return nil, 0, err
 	}
@@ -314,8 +312,8 @@ func (f *Faucet) collectUnspentBasicOutputsWithoutConstraints(ctx context.Contex
 	return outputs, balance, nil
 }
 
-func (f *Faucet) computeAddressBalance(ctx context.Context, address iotago.Address) (uint64, error) {
-	_, balance, err := f.collectUnspentBasicOutputsWithoutConstraints(ctx, address)
+func (f *Faucet) computeAddressBalance(address iotago.Address) (uint64, error) {
+	_, balance, err := f.collectUnspentBasicOutputsWithoutConstraints(address)
 	return balance, err
 }
 
@@ -339,7 +337,7 @@ func (f *Faucet) Enqueue(bech32Addr string) (*FaucetEnqueueResponse, error) {
 	}
 
 	amount := f.opts.amount
-	balance, err := f.computeAddressBalance(f.runloopCtx, addr)
+	balance, err := f.computeAddressBalance(addr)
 	if err == nil && balance >= f.opts.amount {
 		amount = f.opts.smallAmount
 
@@ -526,7 +524,7 @@ func (f *Faucet) buildTransactionPayload(unspentOutputs []UTXOOutput, batchedReq
 	var outputIndex uint16 = 0
 	for _, output := range txPayload.Essence.Outputs {
 		basicOutput := output.(*iotago.BasicOutput)
-		addr := basicOutput.UnlockConditionsSet().Address().Address
+		addr := basicOutput.UnlockConditionSet().Address().Address
 
 		if f.address.Equal(addr) {
 			// found the remainder address in the outputs
@@ -685,10 +683,8 @@ func (f *Faucet) processRequestsWithoutLocking(collectedRequestsCounter int, amo
 // RunFaucetLoop collects unspent outputs on the faucet address and batches the requests from the queue.
 func (f *Faucet) RunFaucetLoop(ctx context.Context, initDoneCallback func()) error {
 
-	f.runloopCtx = ctx
-
 	// set initial faucet balance
-	faucetBalance, err := f.computeAddressBalance(ctx, f.address)
+	faucetBalance, err := f.computeAddressBalance(f.address)
 	if err != nil {
 		return common.CriticalError(fmt.Errorf("reading faucet address balance failed: %s, error: %s", f.address.Bech32(f.protoParas.Bech32HRP), err))
 	}
@@ -728,7 +724,7 @@ func (f *Faucet) RunFaucetLoop(ctx context.Context, initDoneCallback func()) err
 					// since it's creating transaction could also have consumed the same UTXOs.
 					return []UTXOOutput{*f.lastRemainderOutput}, f.lastRemainderOutput.Output.Deposit(), nil
 				}
-				return f.collectUnspentBasicOutputsWithoutConstraints(ctx, f.address)
+				return f.collectUnspentBasicOutputsWithoutConstraints(f.address)
 			}
 
 			processRequests := func() ([]UTXOOutput, []*queueItem, iotago.BlockIDs, error) {
@@ -857,7 +853,7 @@ func (f *Faucet) ApplyNewLedgerUpdate(createdOutputs iotago.OutputIDs, consumedO
 	checkPendingBlockMetadata := func(pendingTx *pendingTransaction) {
 		blockID := pendingTx.BlockID
 
-		metadata, err := f.blockMetadataFunc(f.runloopCtx, blockID)
+		metadata, err := f.blockMetadataFunc(blockID)
 		if err != nil {
 			// an error occurred => re-add the items to the queue and delete the pending transaction
 			conflicting = true
@@ -921,7 +917,7 @@ func (f *Faucet) ApplyNewLedgerUpdate(createdOutputs iotago.OutputIDs, consumedO
 
 	// recalculate the current faucet balance
 	// no need to lock since we are in the milestone confirmation anyway
-	faucetBalance, err := f.computeAddressBalance(f.runloopCtx, f.address)
+	faucetBalance, err := f.computeAddressBalance(f.address)
 	if err != nil {
 		return common.CriticalError(fmt.Errorf("reading faucet address balance failed: %s, error: %s", f.address.Bech32(f.protoParas.Bech32HRP), err))
 	}
