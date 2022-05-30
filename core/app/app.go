@@ -1,11 +1,11 @@
 package app
 
 import (
-	"github.com/gohornet/inx-app/inx"
-	"github.com/gohornet/inx-faucet/core/faucet"
 	"github.com/iotaledger/hive.go/app"
 	"github.com/iotaledger/hive.go/app/core/shutdown"
 	"github.com/iotaledger/hive.go/app/plugins/profiling"
+	"github.com/iotaledger/inx-app/inx"
+	"github.com/iotaledger/inx-faucet/core/faucet"
 )
 
 var (
@@ -13,7 +13,7 @@ var (
 	Name = "inx-faucet"
 
 	// Version of the app.
-	Version = "0.6.0"
+	Version = "0.7.0"
 )
 
 func App() *app.App {

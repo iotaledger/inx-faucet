@@ -10,19 +10,19 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/gohornet/hornet/pkg/common"
-	"github.com/gohornet/hornet/pkg/dag"
-	"github.com/gohornet/hornet/pkg/model/milestone"
-	"github.com/gohornet/hornet/pkg/model/storage"
-	"github.com/gohornet/hornet/pkg/model/utxo"
-	"github.com/gohornet/hornet/pkg/protocol/gossip"
-	"github.com/gohornet/hornet/pkg/testsuite"
-	"github.com/gohornet/hornet/pkg/testsuite/utils"
-	"github.com/gohornet/hornet/pkg/whiteflag"
-	"github.com/gohornet/inx-faucet/pkg/faucet"
 	"github.com/iotaledger/hive.go/daemon"
 	"github.com/iotaledger/hive.go/events"
 	"github.com/iotaledger/hive.go/serializer/v2"
+	"github.com/iotaledger/hornet/pkg/common"
+	"github.com/iotaledger/hornet/pkg/dag"
+	"github.com/iotaledger/hornet/pkg/model/milestone"
+	"github.com/iotaledger/hornet/pkg/model/storage"
+	"github.com/iotaledger/hornet/pkg/model/utxo"
+	"github.com/iotaledger/hornet/pkg/protocol/gossip"
+	"github.com/iotaledger/hornet/pkg/testsuite"
+	"github.com/iotaledger/hornet/pkg/testsuite/utils"
+	"github.com/iotaledger/hornet/pkg/whiteflag"
+	"github.com/iotaledger/inx-faucet/pkg/faucet"
 	iotago "github.com/iotaledger/iota.go/v3"
 	"github.com/iotaledger/iota.go/v3/pow"
 )
@@ -40,7 +40,7 @@ var (
 	seed2, _       = hex.DecodeString("d5353ceeed380ab89a0f6abe4630c2091acc82617c0edd4ff10bd60bba89e2ed30805ef095b989c2bf208a474f8748d11d954aade374380422d4d812b6f1da90")
 	seed3, _       = hex.DecodeString("bd6fe09d8a309ca309c5db7b63513240490109cd0ac6b123551e9da0d5c8916c4a5a4f817e4b4e9df89885ce1af0986da9f1e56b65153c2af1e87ab3b11dabb4")
 
-	MinPoWScore   = 10.0
+	MinPoWScore   = 10
 	BelowMaxDepth = 15
 )
 
@@ -77,7 +77,7 @@ func NewFaucetTestEnv(t *testing.T,
 
 	genesisAddress := genesisWallet.Address()
 
-	te := testsuite.SetupTestEnvironment(t, genesisAddress, 2, uint16(BelowMaxDepth), MinPoWScore, false)
+	te := testsuite.SetupTestEnvironment(t, genesisAddress, 2, uint8(BelowMaxDepth), uint32(MinPoWScore), false)
 
 	// Add token supply to our local HDWallet
 	genesisWallet.BookOutput(te.GenesisOutput)
@@ -233,7 +233,7 @@ func NewFaucetTestEnv(t *testing.T,
 		}
 
 		score := pow.Score(blk.Data())
-		if score < MinPoWScore {
+		if score < float64(MinPoWScore) {
 			return iotago.BlockID{}, fmt.Errorf("block has insufficient PoW score %0.2f", score)
 		}
 
