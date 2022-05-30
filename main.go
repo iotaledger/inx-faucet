@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/gohornet/inx-faucet/core/app"
+	"github.com/iotaledger/inx-faucet/core/app"
 )
 
 func main() {
