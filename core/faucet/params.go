@@ -1,8 +1,9 @@
 package faucet
 
 import (
-	"github.com/iotaledger/hive.go/app"
 	"time"
+
+	"github.com/iotaledger/hive.go/app"
 
 	iotago "github.com/iotaledger/iota.go/v3"
 )
@@ -15,6 +16,11 @@ type ParametersFaucet struct {
 	TagMessage        string        `default:"HORNET FAUCET" usage:"the faucet transaction tag payload"`
 	BatchTimeout      time.Duration `default:"2s" usage:"the maximum duration for collecting faucet batches"`
 	BindAddress       string        `default:"localhost:8091" usage:"the bind address on which the faucet website can be accessed from"`
+	RateLimit         struct {
+		Period      time.Duration `default:"5m" usage:"the period for rate limiting"`
+		MaxRequests int           `default:"10" usage:"the maximum number of requests per period"`
+		MaxBurst    int           `default:"20" usage:"additional requests allowed in the burst period"`
+	}
 }
 
 var ParamsFaucet = &ParametersFaucet{

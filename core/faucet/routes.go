@@ -72,8 +72,8 @@ func setupRoutes(e *echo.Echo) {
 		Skipper: rateLimiterSkipper,
 		Store: middleware.NewRateLimiterMemoryStoreWithConfig(
 			middleware.RateLimiterMemoryStoreConfig{
-				Rate:      rate.Limit(1 / 300.0), // 1 request every 5 minutes
-				Burst:     10,                    // additional burst of 10 requests
+				Rate:      rate.Limit(float64(ParamsFaucet.RateLimit.MaxRequests) / ParamsFaucet.RateLimit.Period.Seconds()),
+				Burst:     ParamsFaucet.RateLimit.MaxBurst,
 				ExpiresIn: 5 * time.Minute,
 			},
 		),
