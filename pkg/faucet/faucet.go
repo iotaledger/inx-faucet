@@ -441,7 +441,11 @@ func (f *Faucet) createBlock(txPayload iotago.Payload, tip ...iotago.BlockID) (*
 		tips = append(tips, tip[0])
 	}
 
-	return builder.NewBlockBuilder(f.protoParas.Version).ParentsBlockIDs(tips).Payload(txPayload).Build()
+	return builder.NewBlockBuilder().
+		ProtocolVersion(f.protoParas.Version).
+		Parents(tips).
+		Payload(txPayload).
+		Build()
 }
 
 // buildTransactionPayload creates a signed transaction payload with all UTXO and batched requests.
@@ -458,7 +462,7 @@ func (f *Faucet) buildTransactionPayload(unspentOutputs []UTXOOutput, batchedReq
 	for _, unspentOutput := range unspentOutputs {
 		outputCount++
 		remainderAmount += int64(unspentOutput.Output.Deposit())
-		txBuilder.AddInput(&builder.ToBeSignedUTXOInput{Address: f.address, OutputID: unspentOutput.OutputID, Output: unspentOutput.Output})
+		txBuilder.AddInput(&builder.TxInput{UnlockTarget: f.address, InputID: unspentOutput.OutputID, Input: unspentOutput.Output})
 		consumedInputs = append(consumedInputs, unspentOutput.OutputID)
 	}
 
