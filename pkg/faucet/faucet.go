@@ -747,7 +747,7 @@ func (f *Faucet) RunFaucetLoop(ctx context.Context, initDoneCallback func()) err
 				}
 
 				// if a lastBlockID exists, we need to reference it to chain the transactions in the correct order for whiteflag.
-				// lastBlockID is reset by ApplyConfirmation in case the last faucet block is not confirmed and below max depth.
+				// lastBlockID is reset by ApplyNewLedgerUpdate in case the last faucet block is not confirmed and below max depth.
 				var tips iotago.BlockIDs
 				if f.lastBlockID != nil {
 					tips = append(tips, *f.lastBlockID)
@@ -797,18 +797,18 @@ func (f *Faucet) ApplyNewLedgerUpdate(createdOutputs iotago.OutputIDs, consumedO
 
 	// create maps for faster lookup.
 	// outputs that are created and consumed in the same milestone exist in both maps.
-	newSpentsMap := make(map[string]struct{})
+	newSpentsMap := make(map[iotago.OutputID]struct{})
 	for _, spent := range consumedOutputs {
-		newSpentsMap[spent.ToHex()] = struct{}{}
+		newSpentsMap[spent] = struct{}{}
 	}
 
-	newOutputsMap := make(map[string]struct{})
+	newOutputsMap := make(map[iotago.OutputID]struct{})
 	for _, output := range createdOutputs {
-		newOutputsMap[output.ToHex()] = struct{}{}
+		newOutputsMap[output] = struct{}{}
 	}
 
 	if f.lastRemainderOutput != nil {
-		if _, created := newOutputsMap[f.lastRemainderOutput.OutputID.ToHex()]; created {
+		if _, created := newOutputsMap[f.lastRemainderOutput.OutputID]; created {
 			// the latest transaction got confirmed, reset the lastRemainderOutput
 			f.lastRemainderOutput = nil
 		}
@@ -819,7 +819,7 @@ func (f *Faucet) ApplyNewLedgerUpdate(createdOutputs iotago.OutputIDs, consumedO
 
 		inputWasSpent := false
 		for _, consumedInput := range pendingTx.ConsumedInputs {
-			if _, spent := newSpentsMap[consumedInput.ToHex()]; spent {
+			if _, spent := newSpentsMap[consumedInput]; spent {
 				inputWasSpent = true
 				break
 			}
@@ -836,7 +836,7 @@ func (f *Faucet) ApplyNewLedgerUpdate(createdOutputs iotago.OutputIDs, consumedO
 				TransactionOutputIndex: 0,
 			}
 
-			if _, created := newOutputsMap[txOutputIndexZero.ID().ToHex()]; !created {
+			if _, created := newOutputsMap[txOutputIndexZero.ID()]; !created {
 				// transaction was conflicting => readd the items to the queue and delete the pending transaction
 				conflicting = true
 				f.readdRequestsWithoutLocking(pendingTx.QueuedItems)
@@ -866,9 +866,9 @@ func (f *Faucet) ApplyNewLedgerUpdate(createdOutputs iotago.OutputIDs, consumedO
 			return
 		}
 		if metadata == nil {
-			// block unknown => delete the requests and the pending transaction
+			// block unknown => re-add the items to the queue and delete the pending transaction
 			conflicting = true
-			f.clearRequestsWithoutLocking(pendingTx.QueuedItems)
+			f.readdRequestsWithoutLocking(pendingTx.QueuedItems)
 			f.clearPendingTransactionWithoutLocking(blockID)
 			return
 		}
@@ -899,6 +899,23 @@ func (f *Faucet) ApplyNewLedgerUpdate(createdOutputs iotago.OutputIDs, consumedO
 	// check all remaining pending transactions
 	for _, pendingTx := range f.pendingTransactionsMap {
 		checkPendingBlockMetadata(pendingTx)
+	}
+
+	// check if the lastBlockID is below max depth
+	if !conflicting && f.lastBlockID != nil {
+		metadata, err := f.blockMetadataFunc(*f.lastBlockID)
+		if err != nil {
+			// an error occurred => mark the chain as conflicting
+			conflicting = true
+		}
+		if metadata == nil {
+			// block unknown => mark the chain as conflicting
+			conflicting = true
+		}
+		if metadata.ShouldReattach {
+			// block was below max depth => mark the chain as conflicting
+			conflicting = true
+		}
 	}
 
 	if conflicting {

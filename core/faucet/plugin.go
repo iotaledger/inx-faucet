@@ -147,6 +147,14 @@ func provide(c *dig.Container) error {
 			return faucetOutputs, nil
 		}
 
+		submitBlock := func(ctx context.Context, block *iotago.Block) (iotago.BlockID, error) {
+			if !deps.NodeBridge.IsNodeAlmostSynced() {
+				return iotago.BlockID{}, errors.New("node is not synced")
+			}
+
+			return deps.NodeBridge.SubmitBlock(ctx, block)
+		}
+
 		return faucet.New(
 			CoreComponent.Daemon(),
 			fetchMetadata,
@@ -155,7 +163,7 @@ func provide(c *dig.Container) error {
 			protoParas,
 			&faucetAddress,
 			faucetSigner,
-			deps.NodeBridge.SubmitBlock,
+			submitBlock,
 			faucet.WithLogger(CoreComponent.Logger()),
 			faucet.WithTokenName(deps.NodeBridge.NodeConfig.BaseToken.Name),
 			faucet.WithAmount(ParamsFaucet.Amount),
