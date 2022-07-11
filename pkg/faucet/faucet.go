@@ -747,7 +747,7 @@ func (f *Faucet) RunFaucetLoop(ctx context.Context, initDoneCallback func()) err
 				}
 
 				// if a lastBlockID exists, we need to reference it to chain the transactions in the correct order for whiteflag.
-				// lastBlockID is reset by ApplyConfirmation in case the last faucet block is not confirmed and below max depth.
+				// lastBlockID is reset by ApplyNewLedgerUpdate in case the last faucet block is not confirmed and below max depth.
 				var tips iotago.BlockIDs
 				if f.lastBlockID != nil {
 					tips = append(tips, *f.lastBlockID)
@@ -899,6 +899,23 @@ func (f *Faucet) ApplyNewLedgerUpdate(createdOutputs iotago.OutputIDs, consumedO
 	// check all remaining pending transactions
 	for _, pendingTx := range f.pendingTransactionsMap {
 		checkPendingBlockMetadata(pendingTx)
+	}
+
+	// check if the lastBlockID is below max depth
+	if !conflicting && f.lastBlockID != nil {
+		metadata, err := f.blockMetadataFunc(*f.lastBlockID)
+		if err != nil {
+			// an error occurred => mark the chain as conflicting
+			conflicting = true
+		}
+		if metadata == nil {
+			// block unknown => mark the chain as conflicting
+			conflicting = true
+		}
+		if metadata.ShouldReattach {
+			// block was below max depth => mark the chain as conflicting
+			conflicting = true
+		}
 	}
 
 	if conflicting {
