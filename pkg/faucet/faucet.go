@@ -797,18 +797,18 @@ func (f *Faucet) ApplyNewLedgerUpdate(createdOutputs iotago.OutputIDs, consumedO
 
 	// create maps for faster lookup.
 	// outputs that are created and consumed in the same milestone exist in both maps.
-	newSpentsMap := make(map[string]struct{})
+	newSpentsMap := make(map[iotago.OutputID]struct{})
 	for _, spent := range consumedOutputs {
-		newSpentsMap[spent.ToHex()] = struct{}{}
+		newSpentsMap[spent] = struct{}{}
 	}
 
-	newOutputsMap := make(map[string]struct{})
+	newOutputsMap := make(map[iotago.OutputID]struct{})
 	for _, output := range createdOutputs {
-		newOutputsMap[output.ToHex()] = struct{}{}
+		newOutputsMap[output] = struct{}{}
 	}
 
 	if f.lastRemainderOutput != nil {
-		if _, created := newOutputsMap[f.lastRemainderOutput.OutputID.ToHex()]; created {
+		if _, created := newOutputsMap[f.lastRemainderOutput.OutputID]; created {
 			// the latest transaction got confirmed, reset the lastRemainderOutput
 			f.lastRemainderOutput = nil
 		}
@@ -819,7 +819,7 @@ func (f *Faucet) ApplyNewLedgerUpdate(createdOutputs iotago.OutputIDs, consumedO
 
 		inputWasSpent := false
 		for _, consumedInput := range pendingTx.ConsumedInputs {
-			if _, spent := newSpentsMap[consumedInput.ToHex()]; spent {
+			if _, spent := newSpentsMap[consumedInput]; spent {
 				inputWasSpent = true
 				break
 			}
@@ -836,7 +836,7 @@ func (f *Faucet) ApplyNewLedgerUpdate(createdOutputs iotago.OutputIDs, consumedO
 				TransactionOutputIndex: 0,
 			}
 
-			if _, created := newOutputsMap[txOutputIndexZero.ID().ToHex()]; !created {
+			if _, created := newOutputsMap[txOutputIndexZero.ID()]; !created {
 				// transaction was conflicting => readd the items to the queue and delete the pending transaction
 				conflicting = true
 				f.readdRequestsWithoutLocking(pendingTx.QueuedItems)
