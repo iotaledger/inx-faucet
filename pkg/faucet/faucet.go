@@ -866,9 +866,9 @@ func (f *Faucet) ApplyNewLedgerUpdate(createdOutputs iotago.OutputIDs, consumedO
 			return
 		}
 		if metadata == nil {
-			// block unknown => delete the requests and the pending transaction
+			// block unknown => re-add the items to the queue and delete the pending transaction
 			conflicting = true
-			f.clearRequestsWithoutLocking(pendingTx.QueuedItems)
+			f.readdRequestsWithoutLocking(pendingTx.QueuedItems)
 			f.clearPendingTransactionWithoutLocking(blockID)
 			return
 		}
