@@ -15,7 +15,6 @@ import (
 	"github.com/iotaledger/hive.go/serializer/v2"
 	"github.com/iotaledger/hornet/pkg/common"
 	"github.com/iotaledger/hornet/pkg/dag"
-	"github.com/iotaledger/hornet/pkg/model/milestone"
 	"github.com/iotaledger/hornet/pkg/model/storage"
 	"github.com/iotaledger/hornet/pkg/model/utxo"
 	"github.com/iotaledger/hornet/pkg/protocol/gossip"
@@ -33,15 +32,18 @@ const (
 	faucetBatchTimeout   = 2 * time.Second
 )
 
+const (
+	MinPoWScore     = 10
+	ProtocolVersion = 2
+	BelowMaxDepth   = 15
+)
+
 var (
 	genesisSeed, _ = hex.DecodeString("2f54b071657e6644629a40518ba6554de4eee89f0757713005ad26137d80968d05e1ca1bca555d8b4b85a3f4fcf11a6a48d3d628d1ace40f48009704472fc8f9")
 	faucetSeed, _  = hex.DecodeString("96d9ff7a79e4b0a5f3e5848ae7867064402da92a62eabb4ebbe463f12d1f3b1aace1775488f51cb1e3a80732a03ef60b111d6833ab605aa9f8faebeb33bbe3d9")
 	seed1, _       = hex.DecodeString("b15209ddc93cbdb600137ea6a8f88cdd7c5d480d5815c9352a0fb5c4e4b86f7151dcb44c2ba635657a2df5a8fd48cb9bab674a9eceea527dbbb254ef8c9f9cd7")
 	seed2, _       = hex.DecodeString("d5353ceeed380ab89a0f6abe4630c2091acc82617c0edd4ff10bd60bba89e2ed30805ef095b989c2bf208a474f8748d11d954aade374380422d4d812b6f1da90")
 	seed3, _       = hex.DecodeString("bd6fe09d8a309ca309c5db7b63513240490109cd0ac6b123551e9da0d5c8916c4a5a4f817e4b4e9df89885ce1af0986da9f1e56b65153c2af1e87ab3b11dabb4")
-
-	MinPoWScore   = 10
-	BelowMaxDepth = 15
 )
 
 type FaucetTestEnv struct {
@@ -77,7 +79,7 @@ func NewFaucetTestEnv(t *testing.T,
 
 	genesisAddress := genesisWallet.Address()
 
-	te := testsuite.SetupTestEnvironment(t, genesisAddress, 2, uint8(BelowMaxDepth), uint32(MinPoWScore), false)
+	te := testsuite.SetupTestEnvironment(t, genesisAddress, 2, ProtocolVersion, uint8(BelowMaxDepth), uint32(MinPoWScore), false)
 
 	// Add token supply to our local HDWallet
 	genesisWallet.BookOutput(te.GenesisOutput)
@@ -93,9 +95,8 @@ func NewFaucetTestEnv(t *testing.T,
 		blockA := te.NewBlockBuilder("A").
 			Parents(iotago.BlockIDs{lastBlockID, te.LastMilestoneBlockID()}).
 			FromWallet(genesisWallet).
-			ToWallet(faucetWallet).
 			Amount(faucetBalance).
-			Build().
+			BuildTransactionToWallet(faucetWallet).
 			Store().
 			BookOnWallets()
 
@@ -108,9 +109,8 @@ func NewFaucetTestEnv(t *testing.T,
 		blockB := te.NewBlockBuilder("B").
 			Parents(iotago.BlockIDs{lastBlockID, te.LastMilestoneBlockID()}).
 			FromWallet(genesisWallet).
-			ToWallet(seed1Wallet).
 			Amount(wallet1Balance).
-			Build().
+			BuildTransactionToWallet(seed1Wallet).
 			Store().
 			BookOnWallets()
 
@@ -123,9 +123,8 @@ func NewFaucetTestEnv(t *testing.T,
 		blockC := te.NewBlockBuilder("C").
 			Parents(iotago.BlockIDs{lastBlockID, te.LastMilestoneBlockID()}).
 			FromWallet(genesisWallet).
-			ToWallet(seed2Wallet).
 			Amount(wallet2Balance).
-			Build().
+			BuildTransactionToWallet(seed2Wallet).
 			Store().
 			BookOnWallets()
 
@@ -139,9 +138,8 @@ func NewFaucetTestEnv(t *testing.T,
 		blockD := te.NewBlockBuilder("D").
 			Parents(iotago.BlockIDs{lastBlockID, te.LastMilestoneBlockID()}).
 			FromWallet(genesisWallet).
-			ToWallet(seed3Wallet).
 			Amount(wallet3Balance).
-			Build().
+			BuildTransactionToWallet(seed3Wallet).
 			Store().
 			BookOnWallets()
 
@@ -194,7 +192,7 @@ func NewFaucetTestEnv(t *testing.T,
 		return &faucet.Metadata{
 			IsReferenced:   false,
 			IsConflicting:  false,
-			ShouldReattach: (cmi - ocri) > milestone.Index(BelowMaxDepth),
+			ShouldReattach: (cmi - ocri) > iotago.MilestoneIndex(BelowMaxDepth),
 		}, nil
 	}
 
@@ -251,7 +249,7 @@ func NewFaucetTestEnv(t *testing.T,
 					return gossip.ErrBlockNotSolid
 				}
 
-				if (cmi - entryPointIndex) > milestone.Index(BelowMaxDepth) {
+				if (cmi - entryPointIndex) > iotago.MilestoneIndex(BelowMaxDepth) {
 					// the parent is below max depth
 					return gossip.ErrBlockBelowMaxDepth
 				}
@@ -272,7 +270,7 @@ func NewFaucetTestEnv(t *testing.T,
 				return err
 			}
 
-			if (cmi - ocri) > milestone.Index(BelowMaxDepth) {
+			if (cmi - ocri) > iotago.MilestoneIndex(BelowMaxDepth) {
 				// the parent is below max depth
 				return gossip.ErrBlockBelowMaxDepth
 			}
@@ -325,7 +323,7 @@ func NewFaucetTestEnv(t *testing.T,
 
 	// Connect the callbacks from the testsuite to the Faucet
 	te.ConfigureUTXOCallbacks(
-		func(index milestone.Index, newOutputs utxo.Outputs, newSpents utxo.Spents) {
+		func(index iotago.MilestoneIndex, newOutputs utxo.Outputs, newSpents utxo.Spents) {
 
 			createdOutputs := iotago.OutputIDs{}
 			for _, output := range newOutputs {
@@ -357,7 +355,7 @@ func (env *FaucetTestEnv) ProtocolParameters() *iotago.ProtocolParameters {
 	return env.TestEnv.ProtocolParameters()
 }
 
-func (env *FaucetTestEnv) ConfirmedMilestoneIndex() milestone.Index {
+func (env *FaucetTestEnv) ConfirmedMilestoneIndex() iotago.MilestoneIndex {
 	return env.TestEnv.SyncManager().ConfirmedMilestoneIndex()
 }
 

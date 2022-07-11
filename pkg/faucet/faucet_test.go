@@ -6,7 +6,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/iotaledger/hornet/pkg/model/milestone"
 	"github.com/iotaledger/inx-faucet/pkg/faucet/test"
 	iotago "github.com/iotaledger/iota.go/v3"
 )
@@ -35,7 +34,7 @@ func TestSingleRequest(t *testing.T) {
 	require.NotNil(t, env)
 
 	confirmedMilestoneIndex := env.ConfirmedMilestoneIndex() // 4
-	require.Equal(t, milestone.Index(4), confirmedMilestoneIndex)
+	require.Equal(t, iotago.MilestoneIndex(4), confirmedMilestoneIndex)
 
 	// Verify balances
 	genesisBalance := env.ProtocolParameters().TokenSupply - faucetBalance - wallet1Balance - wallet2Balance - wallet3Balance
@@ -97,7 +96,7 @@ func TestMultipleRequests(t *testing.T) {
 	require.NotNil(t, env)
 
 	confirmedMilestoneIndex := env.ConfirmedMilestoneIndex() // 4
-	require.Equal(t, milestone.Index(4), confirmedMilestoneIndex)
+	require.Equal(t, iotago.MilestoneIndex(4), confirmedMilestoneIndex)
 
 	// Verify balances
 	genesisBalance := env.ProtocolParameters().TokenSupply - faucetBalance - wallet1Balance - wallet2Balance - wallet3Balance
@@ -189,7 +188,7 @@ func TestDoubleSpent(t *testing.T) {
 	require.NotNil(t, env)
 
 	confirmedMilestoneIndex := env.ConfirmedMilestoneIndex() // 4
-	require.Equal(t, milestone.Index(4), confirmedMilestoneIndex)
+	require.Equal(t, iotago.MilestoneIndex(4), confirmedMilestoneIndex)
 
 	// Verify balances
 	genesisBalance := env.ProtocolParameters().TokenSupply - faucetBalance - wallet1Balance - wallet2Balance - wallet3Balance
@@ -205,9 +204,8 @@ func TestDoubleSpent(t *testing.T) {
 	block := env.TestEnv.NewBlockBuilder().
 		LatestMilestoneAsParents().
 		FromWallet(env.FaucetWallet).
-		ToWallet(env.GenesisWallet).
 		Amount(faucetAmount).
-		Build().
+		BuildTransactionToWallet(env.GenesisWallet).
 		Store().
 		BookOnWallets()
 
@@ -266,7 +264,7 @@ func TestBelowMaxDepth(t *testing.T) {
 	require.NotNil(t, env)
 
 	confirmedMilestoneIndex := env.ConfirmedMilestoneIndex() // 4
-	require.Equal(t, milestone.Index(4), confirmedMilestoneIndex)
+	require.Equal(t, iotago.MilestoneIndex(4), confirmedMilestoneIndex)
 
 	// Verify balances
 	genesisBalance := env.ProtocolParameters().TokenSupply - faucetBalance - wallet1Balance - wallet2Balance - wallet3Balance
@@ -332,7 +330,7 @@ func TestBelowMaxDepthAfterRequest(t *testing.T) {
 	require.NotNil(t, env)
 
 	confirmedMilestoneIndex := env.ConfirmedMilestoneIndex() // 4
-	require.Equal(t, milestone.Index(4), confirmedMilestoneIndex)
+	require.Equal(t, iotago.MilestoneIndex(4), confirmedMilestoneIndex)
 
 	// Verify balances
 	genesisBalance := env.ProtocolParameters().TokenSupply - faucetBalance - wallet1Balance - wallet2Balance - wallet3Balance
@@ -451,7 +449,7 @@ func TestCollectFaucetFunds(t *testing.T) {
 	require.NotNil(t, env)
 
 	confirmedMilestoneIndex := env.ConfirmedMilestoneIndex() // 4
-	require.Equal(t, milestone.Index(4), confirmedMilestoneIndex)
+	require.Equal(t, iotago.MilestoneIndex(4), confirmedMilestoneIndex)
 
 	// Verify balances
 	genesisBalance := env.ProtocolParameters().TokenSupply - faucetBalance - wallet1Balance - wallet2Balance - wallet3Balance
@@ -479,9 +477,8 @@ func TestCollectFaucetFunds(t *testing.T) {
 	block := env.TestEnv.NewBlockBuilder().
 		LatestMilestoneAsParents().
 		FromWallet(env.GenesisWallet).
-		ToWallet(env.FaucetWallet).
 		Amount(faucetAmount).
-		Build().
+		BuildTransactionToWallet(env.FaucetWallet).
 		Store().
 		BookOnWallets()
 
