@@ -107,16 +107,17 @@ func provide(c *dig.Container) error {
 				return nil, err
 			}
 
+			falseCondition := false
 			query := &nodeclient.BasicOutputsQuery{
 				AddressBech32: address.Bech32(protoParas.Bech32HRP),
 				IndexerExpirationParas: nodeclient.IndexerExpirationParas{
-					HasExpirationCondition: false,
+					HasExpirationCondition: &falseCondition,
 				},
 				IndexerTimelockParas: nodeclient.IndexerTimelockParas{
-					HasTimelockCondition: false,
+					HasTimelockCondition: &falseCondition,
 				},
 				IndexerStorageDepositParas: nodeclient.IndexerStorageDepositParas{
-					RequiresStorageDepositReturn: false,
+					RequiresStorageDepositReturn: &falseCondition,
 				},
 			}
 
