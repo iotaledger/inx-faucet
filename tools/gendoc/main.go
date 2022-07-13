@@ -41,6 +41,8 @@ func main() {
 	ignoreFlags := make(map[string]struct{})
 
 	replaceTopicNames := make(map[string]string)
+	replaceTopicNames["app"] = "Application"
+	replaceTopicNames["inx"] = "INX"
 
 	application := faucetApp.App()
 
