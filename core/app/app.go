@@ -13,7 +13,7 @@ var (
 	Name = "inx-faucet"
 
 	// Version of the app.
-	Version = "1.0.0-beta.1"
+	Version = "1.0.0-beta.2"
 )
 
 func App() *app.App {
