@@ -92,15 +92,16 @@ func provide(c *dig.Container) error {
 			}
 			return &faucet.Metadata{
 				IsReferenced:   metadata.GetReferencedByMilestoneIndex() != 0,
-				IsConflicting:  metadata.GetConflictReason() != inx.BlockMetadata_NONE,
+				IsConflicting:  metadata.GetConflictReason() != inx.BlockMetadata_CONFLICT_REASON_NONE,
 				ShouldReattach: metadata.GetShouldReattach(),
 			}, nil
 		}
 
 		nodeClient := deps.NodeBridge.INXNodeClient()
-		protoParas := deps.NodeBridge.NodeConfig.UnwrapProtocolParameters()
 
 		collectOutputs := func(address iotago.Address) ([]faucet.UTXOOutput, error) {
+
+			protoParas := deps.NodeBridge.ProtocolParameters()
 
 			indexer, err := nodeClient.Indexer(context.Background())
 			if err != nil {
@@ -161,7 +162,7 @@ func provide(c *dig.Container) error {
 			fetchMetadata,
 			collectOutputs,
 			deps.NodeBridge.IsNodeSynced,
-			protoParas,
+			deps.NodeBridge.ProtocolParameters,
 			&faucetAddress,
 			faucetSigner,
 			submitBlock,

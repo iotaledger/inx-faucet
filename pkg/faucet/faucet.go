@@ -22,6 +22,9 @@ import (
 // IsNodeSyncedFunc is a function to query if the used node is synced.
 type IsNodeSyncedFunc = func() bool
 
+// ProtocolParamsFunc is a function to query the node for the latest protocol parameters.
+type ProtocolParamsFunc = func() *iotago.ProtocolParameters
+
 // SendBlockFunc is a function which sends a block to the network.
 type SendBlockFunc = func(ctx context.Context, block *iotago.Block) (iotago.BlockID, error)
 
@@ -107,7 +110,7 @@ type Faucet struct {
 	// used to determine the sync status of the node.
 	nodeSyncedFunc IsNodeSyncedFunc
 	// Protocol parameters including byte costs
-	protoParas *iotago.ProtocolParameters
+	protocolParamsFunc ProtocolParamsFunc
 	// the address of the faucet.
 	address iotago.Address
 	// used to sign the faucet transactions.
@@ -245,7 +248,7 @@ func New(
 	blockMetadataFunc BlockMetadataFunc,
 	collectOutputsFunc BasicOutputsForAddressFunc,
 	nodeSyncedFunc IsNodeSyncedFunc,
-	protoParas *iotago.ProtocolParameters,
+	protocolParamsFunc ProtocolParamsFunc,
 	address iotago.Address,
 	addressSigner iotago.AddressSigner,
 	sendBlockFunc SendBlockFunc,
@@ -260,7 +263,7 @@ func New(
 		blockMetadataFunc:  blockMetadataFunc,
 		collectOutputsFunc: collectOutputsFunc,
 		nodeSyncedFunc:     nodeSyncedFunc,
-		protoParas:         protoParas,
+		protocolParamsFunc: protocolParamsFunc,
 		address:            address,
 		addressSigner:      addressSigner,
 		sendBlockFunc:      sendBlockFunc,
@@ -289,11 +292,12 @@ func (f *Faucet) init() {
 
 // Info returns the used faucet address and remaining balance.
 func (f *Faucet) Info() (*FaucetInfoResponse, error) {
+	protocolParams := f.protocolParamsFunc()
 	return &FaucetInfoResponse{
-		Address:   f.address.Bech32(f.protoParas.Bech32HRP),
+		Address:   f.address.Bech32(protocolParams.Bech32HRP),
 		Balance:   f.faucetBalance,
 		TokenName: f.opts.tokenName,
-		Bech32HRP: f.protoParas.Bech32HRP,
+		Bech32HRP: protocolParams.Bech32HRP,
 	}, nil
 }
 
@@ -384,8 +388,9 @@ func (f *Faucet) parseBech32Address(bech32Addr string) (iotago.Address, error) {
 		return nil, errors.WithMessage(restapi.ErrInvalidParameter, "Invalid bech32 address provided!")
 	}
 
-	if hrp != f.protoParas.Bech32HRP {
-		return nil, errors.WithMessagef(restapi.ErrInvalidParameter, "Invalid bech32 address provided! Address does not start with \"%s\".", f.protoParas.Bech32HRP)
+	protocolParams := f.protocolParamsFunc()
+	if hrp != protocolParams.Bech32HRP {
+		return nil, errors.WithMessagef(restapi.ErrInvalidParameter, "Invalid bech32 address provided! Address does not start with \"%s\".", protocolParams.Bech32HRP)
 	}
 
 	return bech32Address, nil
@@ -442,7 +447,7 @@ func (f *Faucet) createBlock(txPayload iotago.Payload, tip ...iotago.BlockID) (*
 	}
 
 	return builder.NewBlockBuilder().
-		ProtocolVersion(f.protoParas.Version).
+		ProtocolVersion(f.protocolParamsFunc().Version).
 		Parents(tips).
 		Payload(txPayload).
 		Build()
@@ -451,7 +456,7 @@ func (f *Faucet) createBlock(txPayload iotago.Payload, tip ...iotago.BlockID) (*
 // buildTransactionPayload creates a signed transaction payload with all UTXO and batched requests.
 func (f *Faucet) buildTransactionPayload(unspentOutputs []UTXOOutput, batchedRequests []*queueItem) (*iotago.Transaction, iotago.TransactionID, iotago.OutputIDs, *iotago.UTXOInput, uint64, error) {
 
-	txBuilder := builder.NewTransactionBuilder(f.protoParas.NetworkID())
+	txBuilder := builder.NewTransactionBuilder(f.protocolParamsFunc().NetworkID())
 	txBuilder.AddTaggedDataPayload(&iotago.TaggedData{Tag: f.opts.tagMessage, Data: nil})
 
 	outputCount := 0
@@ -505,7 +510,7 @@ func (f *Faucet) buildTransactionPayload(unspentOutputs []UTXOOutput, batchedReq
 		})
 	}
 
-	txPayload, err := txBuilder.Build(f.protoParas, f.addressSigner)
+	txPayload, err := txBuilder.Build(f.protocolParamsFunc(), f.addressSigner)
 	if err != nil {
 		return nil, iotago.TransactionID{}, nil, nil, 0, err
 	}
@@ -690,7 +695,7 @@ func (f *Faucet) RunFaucetLoop(ctx context.Context, initDoneCallback func()) err
 	// set initial faucet balance
 	faucetBalance, err := f.computeAddressBalance(f.address)
 	if err != nil {
-		return common.CriticalError(fmt.Errorf("reading faucet address balance failed: %s, error: %s", f.address.Bech32(f.protoParas.Bech32HRP), err))
+		return common.CriticalError(fmt.Errorf("reading faucet address balance failed: %s, error: %s", f.address.Bech32(f.protocolParamsFunc().Bech32HRP), err))
 	}
 	f.faucetBalance = faucetBalance
 
@@ -940,7 +945,7 @@ func (f *Faucet) ApplyNewLedgerUpdate(createdOutputs iotago.OutputIDs, consumedO
 	// no need to lock since we are in the milestone confirmation anyway
 	faucetBalance, err := f.computeAddressBalance(f.address)
 	if err != nil {
-		return common.CriticalError(fmt.Errorf("reading faucet address balance failed: %s, error: %s", f.address.Bech32(f.protoParas.Bech32HRP), err))
+		return common.CriticalError(fmt.Errorf("reading faucet address balance failed: %s, error: %s", f.address.Bech32(f.protocolParamsFunc().Bech32HRP), err))
 	}
 
 	if faucetBalance < pendingRequestsBalance {
