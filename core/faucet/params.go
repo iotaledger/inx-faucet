@@ -21,6 +21,8 @@ type ParametersFaucet struct {
 		MaxRequests int           `default:"10" usage:"the maximum number of requests per period"`
 		MaxBurst    int           `default:"20" usage:"additional requests allowed in the burst period"`
 	}
+	// DebugRequestLoggerEnabled defines whether the debug logging for requests should be enabled
+	DebugRequestLoggerEnabled bool `default:"false" usage:"whether the debug logging for requests should be enabled"`
 }
 
 var ParamsFaucet = &ParametersFaucet{

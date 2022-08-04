@@ -64,16 +64,17 @@ Example:
 
 ## <a id="faucet"></a> 3. Faucet
 
-| Name                           | Description                                                                                                                  | Type   | Default value    |
-| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- | ------ | ---------------- |
-| amount                         | The amount of funds the requester receives                                                                                   | uint   | 1000000000       |
-| smallAmount                    | The amount of funds the requester receives if the target address has more funds than the faucet amount and less than maximum | uint   | 100000000        |
-| maxAddressBalance              | The maximum allowed amount of funds on the target address                                                                    | uint   | 2000000000       |
-| maxOutputCount                 | The maximum output count per faucet message                                                                                  | int    | 128              |
-| tagMessage                     | The faucet transaction tag payload                                                                                           | string | "HORNET FAUCET"  |
-| batchTimeout                   | The maximum duration for collecting faucet batches                                                                           | string | "2s"             |
-| bindAddress                    | The bind address on which the faucet website can be accessed from                                                            | string | "localhost:8091" |
-| [rateLimit](#faucet_ratelimit) | Configuration for rateLimit                                                                                                  | object |                  |
+| Name                           | Description                                                                                                                  | Type    | Default value    |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- | ------- | ---------------- |
+| amount                         | The amount of funds the requester receives                                                                                   | uint    | 1000000000       |
+| smallAmount                    | The amount of funds the requester receives if the target address has more funds than the faucet amount and less than maximum | uint    | 100000000        |
+| maxAddressBalance              | The maximum allowed amount of funds on the target address                                                                    | uint    | 2000000000       |
+| maxOutputCount                 | The maximum output count per faucet message                                                                                  | int     | 128              |
+| tagMessage                     | The faucet transaction tag payload                                                                                           | string  | "HORNET FAUCET"  |
+| batchTimeout                   | The maximum duration for collecting faucet batches                                                                           | string  | "2s"             |
+| bindAddress                    | The bind address on which the faucet website can be accessed from                                                            | string  | "localhost:8091" |
+| [rateLimit](#faucet_ratelimit) | Configuration for rateLimit                                                                                                  | object  |                  |
+| debugRequestLoggerEnabled      | Whether the debug logging for requests should be enabled                                                                     | boolean | false            |
 
 ### <a id="faucet_ratelimit"></a> RateLimit
 
@@ -99,7 +100,8 @@ Example:
         "period": "5m",
         "maxRequests": 10,
         "maxBurst": 20
-      }
+      },
+      "debugRequestLoggerEnabled": false
     }
   }
 ```

@@ -8,7 +8,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/pkg/errors"
 	"go.uber.org/dig"
@@ -19,6 +18,7 @@ import (
 	"github.com/iotaledger/hive.go/app/core/shutdown"
 	"github.com/iotaledger/hive.go/crypto"
 	"github.com/iotaledger/hornet/v2/pkg/common"
+	"github.com/iotaledger/inx-app/httpserver"
 	"github.com/iotaledger/inx-app/nodebridge"
 	"github.com/iotaledger/inx-faucet/pkg/daemon"
 	"github.com/iotaledger/inx-faucet/pkg/faucet"
@@ -186,13 +186,13 @@ func run() error {
 
 	// create a background worker that handles the ledger updates
 	CoreComponent.Daemon().BackgroundWorker("Faucet[LedgerUpdates]", func(ctx context.Context) {
-		if err := deps.NodeBridge.ListenToLedgerUpdates(ctx, 0, 0, func(update *inx.LedgerUpdate) error {
+		if err := deps.NodeBridge.ListenToLedgerUpdates(ctx, 0, 0, func(update *nodebridge.LedgerUpdate) error {
 			createdOutputs := iotago.OutputIDs{}
-			for _, output := range update.GetCreated() {
+			for _, output := range update.Created {
 				createdOutputs = append(createdOutputs, output.GetOutputId().Unwrap())
 			}
 			consumedOutputs := iotago.OutputIDs{}
-			for _, spent := range update.GetConsumed() {
+			for _, spent := range update.Consumed {
 				consumedOutputs = append(consumedOutputs, spent.GetOutput().GetOutputId().Unwrap())
 			}
 
@@ -215,9 +215,7 @@ func run() error {
 		CoreComponent.LogPanicf("failed to start worker: %s", err)
 	}
 
-	e := echo.New()
-	e.HideBanner = true
-	e.Use(middleware.Recover())
+	e := httpserver.NewEcho(CoreComponent.Logger(), nil, ParamsFaucet.DebugRequestLoggerEnabled)
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
 		AllowOrigins: []string{"*"},
 		AllowMethods: []string{http.MethodGet, http.MethodPost},
