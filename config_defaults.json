@@ -18,7 +18,8 @@
       "period": "5m",
       "maxRequests": 10,
       "maxBurst": 20
-    }
+    },
+    "debugRequestLoggerEnabled": false
   },
   "profiling": {
     "enabled": false,
