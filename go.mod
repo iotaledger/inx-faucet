@@ -5,7 +5,7 @@ go 1.18
 require (
 	github.com/iotaledger/hive.go v0.0.0-20220714075325-11202fe498d6
 	github.com/iotaledger/hive.go/serializer/v2 v2.0.0-20220714075325-11202fe498d6
-	github.com/iotaledger/hornet/v2 v2.0.0-beta.3
+	github.com/iotaledger/hornet/v2 v2.0.0-beta.4
 	github.com/iotaledger/inx-app v1.0.0-beta.6
 	github.com/iotaledger/inx/go v1.0.0-beta.4
 	github.com/iotaledger/iota.go/v3 v3.0.0-beta.4
@@ -27,7 +27,7 @@ require (
 	github.com/cespare/xxhash/v2 v2.1.2 // indirect
 	github.com/cockroachdb/errors v1.9.0 // indirect
 	github.com/cockroachdb/logtags v0.0.0-20211118104740-dabe8e521a4f // indirect
-	github.com/cockroachdb/pebble v0.0.0-20220726134658-7b78c71e4055 // indirect
+	github.com/cockroachdb/pebble v0.0.0-20220803145439-69c6e876a3f5 // indirect
 	github.com/cockroachdb/redact v1.1.3 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.0.1 // indirect

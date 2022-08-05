@@ -14,7 +14,7 @@ import (
 	"github.com/iotaledger/hive.go/logger"
 	"github.com/iotaledger/hive.go/syncutils"
 	"github.com/iotaledger/hornet/v2/pkg/common"
-	"github.com/iotaledger/hornet/v2/pkg/restapi"
+	"github.com/iotaledger/inx-app/httpserver"
 	iotago "github.com/iotaledger/iota.go/v3"
 	"github.com/iotaledger/iota.go/v3/builder"
 )
@@ -337,7 +337,7 @@ func (f *Faucet) Enqueue(bech32Addr string) (*FaucetEnqueueResponse, error) {
 	defer f.Unlock()
 
 	if _, exists := f.queueMap[bech32Addr]; exists {
-		return nil, errors.WithMessage(restapi.ErrInvalidParameter, "Address is already in the queue.")
+		return nil, errors.WithMessage(httpserver.ErrInvalidParameter, "Address is already in the queue.")
 	}
 
 	amount := f.opts.amount
@@ -346,7 +346,7 @@ func (f *Faucet) Enqueue(bech32Addr string) (*FaucetEnqueueResponse, error) {
 		amount = f.opts.smallAmount
 
 		if balance >= f.opts.maxAddressBalance {
-			return nil, errors.WithMessage(restapi.ErrInvalidParameter, "You already have enough funds on your address.")
+			return nil, errors.WithMessage(httpserver.ErrInvalidParameter, "You already have enough funds on your address.")
 		}
 	}
 
@@ -385,12 +385,12 @@ func (f *Faucet) parseBech32Address(bech32Addr string) (iotago.Address, error) {
 
 	hrp, bech32Address, err := iotago.ParseBech32(bech32Addr)
 	if err != nil {
-		return nil, errors.WithMessage(restapi.ErrInvalidParameter, "Invalid bech32 address provided!")
+		return nil, errors.WithMessage(httpserver.ErrInvalidParameter, "Invalid bech32 address provided!")
 	}
 
 	protocolParams := f.protocolParamsFunc()
 	if hrp != protocolParams.Bech32HRP {
-		return nil, errors.WithMessagef(restapi.ErrInvalidParameter, "Invalid bech32 address provided! Address does not start with \"%s\".", protocolParams.Bech32HRP)
+		return nil, errors.WithMessagef(httpserver.ErrInvalidParameter, "Invalid bech32 address provided! Address does not start with \"%s\".", protocolParams.Bech32HRP)
 	}
 
 	return bech32Address, nil
