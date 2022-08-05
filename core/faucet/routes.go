@@ -12,7 +12,7 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/time/rate"
 
-	"github.com/iotaledger/hornet/v2/pkg/restapi"
+	"github.com/iotaledger/inx-app/httpserver"
 )
 
 const (
@@ -96,7 +96,7 @@ func setupRoutes(e *echo.Echo) {
 			return err
 		}
 
-		return restapi.JSONResponse(c, http.StatusOK, resp)
+		return httpserver.JSONResponse(c, http.StatusOK, resp)
 	})
 
 	apiGroup.POST(RouteFaucetEnqueue, func(c echo.Context) error {
@@ -109,7 +109,7 @@ func setupRoutes(e *echo.Echo) {
 			var e *echo.HTTPError
 			if errors.As(err, &e) {
 				statusCode = e.Code
-				if errors.Is(err, restapi.ErrInvalidParameter) {
+				if errors.Is(err, httpserver.ErrInvalidParameter) {
 					message = strings.Replace(err.Error(), ": "+errors.Unwrap(err).Error(), "", 1)
 				} else {
 					message = err.Error()
@@ -119,9 +119,9 @@ func setupRoutes(e *echo.Echo) {
 				message = fmt.Sprintf("internal server error. error: %s", err.Error())
 			}
 
-			return c.JSON(statusCode, restapi.HTTPErrorResponseEnvelope{Error: restapi.HTTPErrorResponse{Code: strconv.Itoa(statusCode), Message: message}})
+			return c.JSON(statusCode, httpserver.HTTPErrorResponseEnvelope{Error: httpserver.HTTPErrorResponse{Code: strconv.Itoa(statusCode), Message: message}})
 		}
 
-		return restapi.JSONResponse(c, http.StatusAccepted, resp)
+		return httpserver.JSONResponse(c, http.StatusAccepted, resp)
 	})
 }

@@ -4,7 +4,7 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/pkg/errors"
 
-	"github.com/iotaledger/hornet/v2/pkg/restapi"
+	"github.com/iotaledger/inx-app/httpserver"
 	"github.com/iotaledger/inx-faucet/pkg/faucet"
 )
 
@@ -16,7 +16,7 @@ func addFaucetOutputToQueue(c echo.Context) (*faucet.FaucetEnqueueResponse, erro
 
 	request := &faucetEnqueueRequest{}
 	if err := c.Bind(request); err != nil {
-		return nil, errors.WithMessagef(restapi.ErrInvalidParameter, "Invalid Request! Error: %s", err)
+		return nil, errors.WithMessagef(httpserver.ErrInvalidParameter, "Invalid Request! Error: %s", err)
 	}
 
 	response, err := deps.Faucet.Enqueue(request.Address)
