@@ -19,9 +19,18 @@
 .git/
 
 # Docker related files
-docker/
 .dockerignore
 docker-compose.yml
 
+# Documentation
+documentation/
+
+# Scripts + Tools
+scripts/
+tools/
+
 # OSX related files
 .DS_Store
+
+# Executable
+/inx-faucet
