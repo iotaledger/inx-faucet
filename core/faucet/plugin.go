@@ -14,9 +14,9 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/iotaledger/hive.go/app"
-	"github.com/iotaledger/hive.go/app/core/shutdown"
-	"github.com/iotaledger/hive.go/crypto"
+	"github.com/iotaledger/hive.go/core/app"
+	"github.com/iotaledger/hive.go/core/app/core/shutdown"
+	"github.com/iotaledger/hive.go/core/crypto"
 	"github.com/iotaledger/hornet/v2/pkg/common"
 	"github.com/iotaledger/inx-app/httpserver"
 	"github.com/iotaledger/inx-app/nodebridge"
@@ -112,13 +112,13 @@ func provide(c *dig.Container) error {
 			query := &nodeclient.BasicOutputsQuery{
 				AddressBech32: address.Bech32(protoParas.Bech32HRP),
 				IndexerExpirationParas: nodeclient.IndexerExpirationParas{
-					HasExpirationCondition: &falseCondition,
+					HasExpiration: &falseCondition,
 				},
 				IndexerTimelockParas: nodeclient.IndexerTimelockParas{
-					HasTimelockCondition: &falseCondition,
+					HasTimelock: &falseCondition,
 				},
 				IndexerStorageDepositParas: nodeclient.IndexerStorageDepositParas{
-					RequiresStorageDepositReturn: &falseCondition,
+					HasStorageDepositReturn: &falseCondition,
 				},
 			}
 
