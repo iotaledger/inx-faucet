@@ -375,7 +375,7 @@ func (env *FaucetTestEnv) processFaucetRequests(preFlushFunc func() error) (iota
 		tips = append(tips, blockID)
 		wg.Done()
 	})
-	env.Faucet.Events.IssuedBlock.Attach(onFaucetIssuedBlock)
+	env.Faucet.Events.IssuedBlock.Hook(onFaucetIssuedBlock)
 	defer env.Faucet.Events.IssuedBlock.Detach(onFaucetIssuedBlock)
 
 	if preFlushFunc != nil {
