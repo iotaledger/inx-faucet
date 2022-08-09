@@ -2,10 +2,11 @@ package faucet
 
 import (
 	"embed"
-	"github.com/labstack/echo/v4"
 	"io/fs"
 	"net/http"
 	"strings"
+
+	"github.com/labstack/echo/v4"
 )
 
 //go:embed frontend/public
