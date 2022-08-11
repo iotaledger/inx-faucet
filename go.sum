@@ -82,6 +82,7 @@ github.com/beorn7/perks v1.0.0/go.mod h1:KWe93zE9D1o94FZ5RNwFwVgaQK1VOXiVxmqh+Ce
 github.com/beorn7/perks v1.0.1 h1:VlbKKnNfV8bJzeqoa4cOKqO6bYr3WgKZxO8Z16+hsOM=
 github.com/beorn7/perks v1.0.1/go.mod h1:G2ZrVWU2WbWT9wwq4/hrbKbnv/1ERSJQ0ibhJ6rlkpw=
 github.com/bgentry/speakeasy v0.1.0/go.mod h1:+zsyZBPWlz7T6j88CTgSN5bM796AkVf0kBD4zp0CCIs=
+github.com/btcsuite/btcd v0.20.1-beta h1:Ik4hyJqN8Jfyv3S4AGBOmyouMsYE3EdYODkMbQjwPGw=
 github.com/btcsuite/btcd/btcec/v2 v2.2.0 h1:fzn1qaOt32TuLjFlkzYSsBC35Q3KUjT1SwPxiMSCF5k=
 github.com/btcsuite/btcd/btcec/v2 v2.2.0/go.mod h1:U7MHm051Al6XmscBQ0BoNydpOTsFAn707034b5nY8zU=
 github.com/btcsuite/btcd/chaincfg/chainhash v1.0.1 h1:q0rUy8C/TYNBQS1+CGKw68tLOFYSNEs0TFnxxnS9+4U=
@@ -340,8 +341,8 @@ github.com/iotaledger/grocksdb v1.7.5-0.20220808142449-1dc0b8ac4d7d h1:KYc/EkMX3
 github.com/iotaledger/grocksdb v1.7.5-0.20220808142449-1dc0b8ac4d7d/go.mod h1:DuNKJ1G/vKugT7WGAoftMTu2aApNNxF4ADFMxLmKS2Y=
 github.com/iotaledger/hive.go/core v1.0.0-beta.2 h1:+d+lhK8TvbTWkJsHTpnRxsXSiyDzTaFn2oLRc+AIG2Q=
 github.com/iotaledger/hive.go/core v1.0.0-beta.2/go.mod h1:bYl+7/qkM+rWiw8F6JF7dF5/9MW3y8F7j7DxDnTqWeE=
-github.com/iotaledger/hive.go/serializer/v2 v2.0.0-beta.1 h1:0NwAA/6N8/pUm7IQdd6rjmExfdwNZigYFhE31fOuQrU=
-github.com/iotaledger/hive.go/serializer/v2 v2.0.0-beta.1/go.mod h1:beZKjVT4HPayWfwsmItNNI5E81rS783vGx5ZwRbZQgY=
+github.com/iotaledger/hive.go/serializer/v2 v2.0.0-beta.2 h1:3eiiw4JazsOgDcyxT5dA4UhFRHO5NCAWyWwOl8aRa94=
+github.com/iotaledger/hive.go/serializer/v2 v2.0.0-beta.2/go.mod h1:beZKjVT4HPayWfwsmItNNI5E81rS783vGx5ZwRbZQgY=
 github.com/iotaledger/hornet/v2 v2.0.0-beta.4.0.20220809143824-3dc12686641f h1:sDrt+IAS63RaUDJs9/xifks9ezGj0vf4K1ixA0IfzKE=
 github.com/iotaledger/hornet/v2 v2.0.0-beta.4.0.20220809143824-3dc12686641f/go.mod h1:oNUoEL8PrpJ268m/PelB8DVtAV+jVTGHgGUipXv5Qdg=
 github.com/iotaledger/inx-app v1.0.0-beta.9 h1:CZdLhPLXOGz3rosWFBwAVheCMxpiErU3Omqf/80qSh0=
