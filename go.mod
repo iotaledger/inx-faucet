@@ -3,8 +3,8 @@ module github.com/iotaledger/inx-faucet
 go 1.19
 
 require (
-	github.com/iotaledger/hive.go/core v1.0.0-beta.2
-	github.com/iotaledger/hive.go/serializer/v2 v2.0.0-beta.1
+	github.com/iotaledger/hive.go/core v1.0.0-beta.3
+	github.com/iotaledger/hive.go/serializer/v2 v2.0.0-beta.2
 	github.com/iotaledger/hornet/v2 v2.0.0-beta.4.0.20220809143824-3dc12686641f
 	github.com/iotaledger/inx-app v1.0.0-beta.9
 	github.com/iotaledger/inx/go v1.0.0-beta.5
@@ -50,6 +50,7 @@ require (
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0 // indirect
 	github.com/hashicorp/go-version v1.6.0 // indirect
 	github.com/hashicorp/golang-lru v0.5.5-0.20210104140557-80c98217689d // indirect
+	github.com/iancoleman/orderedmap v0.2.0 // indirect
 	github.com/iotaledger/go-ds-kvstore v1.0.0-beta.2 // indirect
 	github.com/iotaledger/grocksdb v1.7.5-0.20220808142449-1dc0b8ac4d7d // indirect
 	github.com/iotaledger/iota.go v1.0.0 // indirect
