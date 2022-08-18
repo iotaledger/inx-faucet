@@ -9,7 +9,7 @@ import (
 )
 
 var (
-	// AppName is the name of the app.
+	// Name is the name of the app.
 	Name = "inx-faucet"
 
 	// Version of the app.
