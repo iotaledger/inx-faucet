@@ -307,7 +307,7 @@ func (f *Faucet) Info() (*InfoResponse, error) {
 func (f *Faucet) collectUnspentBasicOutputsWithoutConstraints(address iotago.Address) ([]UTXOOutput, uint64, error) {
 
 	outputs, err := f.collectOutputsFunc(address)
-	if err != err {
+	if err != nil {
 		return nil, 0, err
 	}
 
@@ -716,7 +716,7 @@ func (f *Faucet) RunFaucetLoop(ctx context.Context, initDoneCallback func()) err
 	// set initial faucet balance
 	faucetBalance, err := f.computeAddressBalance(f.address)
 	if err != nil {
-		return common.CriticalError(fmt.Errorf("reading faucet address balance failed: %s, error: %s", f.address.Bech32(f.protocolParamsFunc().Bech32HRP), err))
+		return common.CriticalError(fmt.Errorf("reading faucet address balance failed: %s, error: %w", f.address.Bech32(f.protocolParamsFunc().Bech32HRP), err))
 	}
 	f.faucetBalance = faucetBalance
 
@@ -734,7 +734,7 @@ func (f *Faucet) RunFaucetLoop(ctx context.Context, initDoneCallback func()) err
 			// first collect requests
 			batchedRequests, err := f.collectRequests(ctx)
 			if err != nil {
-				if err == common.ErrOperationAborted {
+				if errors.Is(err, common.ErrOperationAborted) {
 					return nil
 				}
 				if common.IsCriticalError(err) != nil {
@@ -788,7 +788,7 @@ func (f *Faucet) RunFaucetLoop(ctx context.Context, initDoneCallback func()) err
 
 			unspentOutputs, processableRequests, tips, err := processRequests()
 			if err != nil {
-				if err != ErrNothingToProcess {
+				if !errors.Is(err, ErrNothingToProcess) {
 					if common.IsCriticalError(err) != nil {
 						// error is a critical error
 						// => stop the faucet
@@ -974,7 +974,7 @@ func (f *Faucet) ApplyNewLedgerUpdate(createdOutputs iotago.OutputIDs, consumedO
 	// no need to lock since we are in the milestone confirmation anyway
 	faucetBalance, err := f.computeAddressBalance(f.address)
 	if err != nil {
-		return common.CriticalError(fmt.Errorf("reading faucet address balance failed: %s, error: %s", f.address.Bech32(f.protocolParamsFunc().Bech32HRP), err))
+		return common.CriticalError(fmt.Errorf("reading faucet address balance failed: %s, error: %w", f.address.Bech32(f.protocolParamsFunc().Bech32HRP), err))
 	}
 
 	if faucetBalance < pendingRequestsBalance {
