@@ -293,6 +293,7 @@ func (f *Faucet) init() {
 // Info returns the used faucet address and remaining balance.
 func (f *Faucet) Info() (*FaucetInfoResponse, error) {
 	protocolParams := f.protocolParamsFunc()
+
 	return &FaucetInfoResponse{
 		Address:   f.address.Bech32(protocolParams.Bech32HRP),
 		Balance:   f.faucetBalance,
@@ -318,6 +319,7 @@ func (f *Faucet) collectUnspentBasicOutputsWithoutConstraints(address iotago.Add
 
 func (f *Faucet) computeAddressBalance(address iotago.Address) (uint64, error) {
 	_, balance, err := f.collectUnspentBasicOutputsWithoutConstraints(address)
+
 	return balance, err
 }
 
@@ -364,6 +366,7 @@ func (f *Faucet) Enqueue(bech32Addr string) (*FaucetEnqueueResponse, error) {
 	case f.queue <- request:
 		f.faucetBalance -= amount
 		f.queueMap[bech32Addr] = request
+
 		return &FaucetEnqueueResponse{
 			Address:         bech32Addr,
 			WaitingRequests: len(f.queueMap),
@@ -539,6 +542,7 @@ func (f *Faucet) buildTransactionPayload(unspentOutputs []UTXOOutput, batchedReq
 			// found the remainder address in the outputs
 			found = true
 			remainderOutput.TransactionOutputIndex = outputIndex
+
 			break
 		}
 		outputIndex++
@@ -639,6 +643,7 @@ CollectValues:
 					break CollectValues
 				}
 			}
+
 			break CollectValues
 
 		case request := <-f.queue:
@@ -663,18 +668,21 @@ func (f *Faucet) processRequestsWithoutLocking(collectedRequestsCounter int, amo
 		if !nodeSynced {
 			// request can't be processed because the node is not synchronized => re-add it to the queue
 			unprocessedBatchedRequests = append(unprocessedBatchedRequests, request)
+
 			continue
 		}
 
 		if collectedRequestsCounter >= f.opts.maxOutputCount-1 {
 			// request can't be processed in this transaction => re-add it to the queue
 			unprocessedBatchedRequests = append(unprocessedBatchedRequests, request)
+
 			continue
 		}
 
 		if amount < request.Amount {
 			// not enough funds to process this request => ignore the request
 			f.clearRequestWithoutLocking(request)
+
 			continue
 		}
 
@@ -722,6 +730,7 @@ func (f *Faucet) RunFaucetLoop(ctx context.Context, initDoneCallback func()) err
 					return err
 				}
 				f.logSoftError(err)
+
 				continue
 			}
 
@@ -733,6 +742,7 @@ func (f *Faucet) RunFaucetLoop(ctx context.Context, initDoneCallback func()) err
 					// since it's creating transaction could also have consumed the same UTXOs.
 					return []UTXOOutput{*f.lastRemainderOutput}, f.lastRemainderOutput.Output.Deposit(), nil
 				}
+
 				return f.collectUnspentBasicOutputsWithoutConstraints(f.address)
 			}
 
@@ -773,6 +783,7 @@ func (f *Faucet) RunFaucetLoop(ctx context.Context, initDoneCallback func()) err
 					}
 					f.logSoftError(err)
 				}
+
 				continue
 			}
 
@@ -784,6 +795,7 @@ func (f *Faucet) RunFaucetLoop(ctx context.Context, initDoneCallback func()) err
 				}
 				f.readdRequestsWithoutLocking(processableRequests)
 				f.logSoftError(err)
+
 				continue
 			}
 		}
@@ -826,6 +838,7 @@ func (f *Faucet) ApplyNewLedgerUpdate(createdOutputs iotago.OutputIDs, consumedO
 		for _, consumedInput := range pendingTx.ConsumedInputs {
 			if _, spent := newSpentsMap[consumedInput]; spent {
 				inputWasSpent = true
+
 				break
 			}
 		}
@@ -868,6 +881,7 @@ func (f *Faucet) ApplyNewLedgerUpdate(createdOutputs iotago.OutputIDs, consumedO
 			conflicting = true
 			f.readdRequestsWithoutLocking(pendingTx.QueuedItems)
 			f.clearPendingTransactionWithoutLocking(blockID)
+
 			return
 		}
 		if metadata == nil {
@@ -875,6 +889,7 @@ func (f *Faucet) ApplyNewLedgerUpdate(createdOutputs iotago.OutputIDs, consumedO
 			conflicting = true
 			f.readdRequestsWithoutLocking(pendingTx.QueuedItems)
 			f.clearPendingTransactionWithoutLocking(blockID)
+
 			return
 		}
 
@@ -884,12 +899,14 @@ func (f *Faucet) ApplyNewLedgerUpdate(createdOutputs iotago.OutputIDs, consumedO
 				conflicting = true
 				f.readdRequestsWithoutLocking(pendingTx.QueuedItems)
 				f.clearPendingTransactionWithoutLocking(blockID)
+
 				return
 			}
 
 			// transaction was confirmed => delete the requests and the pending transaction
 			f.clearRequestsWithoutLocking(pendingTx.QueuedItems)
 			f.clearPendingTransactionWithoutLocking(blockID)
+
 			return
 		}
 
@@ -950,9 +967,11 @@ func (f *Faucet) ApplyNewLedgerUpdate(createdOutputs iotago.OutputIDs, consumedO
 
 	if faucetBalance < pendingRequestsBalance {
 		f.faucetBalance = 0
+
 		return nil
 	}
 
 	f.faucetBalance = faucetBalance - pendingRequestsBalance
+
 	return nil
 }

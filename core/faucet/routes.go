@@ -31,6 +31,7 @@ func enforceMaxOneDotPerURL(next echo.HandlerFunc) echo.HandlerFunc {
 		if strings.Count(c.Request().URL.Path, "..") != 0 {
 			return c.String(http.StatusForbidden, "path not allowed")
 		}
+
 		return next(c)
 	}
 }
@@ -79,6 +80,7 @@ func setupRoutes(e *echo.Echo) {
 		),
 		IdentifierExtractor: func(ctx echo.Context) (string, error) {
 			id := ctx.RealIP()
+
 			return id, nil
 		},
 		ErrorHandler: func(context echo.Context, err error) error {

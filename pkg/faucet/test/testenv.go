@@ -208,6 +208,7 @@ func NewFaucetTestEnv(t *testing.T,
 				Output:   output.Output().(*iotago.BasicOutput),
 			})
 		}
+
 		return faucetOutputs, nil
 	}
 
@@ -413,6 +414,7 @@ func (env *FaucetTestEnv) RequestFunds(wallets ...*utils.HDWallet) (iotago.Block
 				return err
 			}
 		}
+
 		return nil
 	})
 	if err != nil {
@@ -433,6 +435,7 @@ func (env *FaucetTestEnv) RequestFundsAndIssueMilestone(wallets ...*utils.HDWall
 
 	// issue milestone on top of new faucet message
 	_, _ = env.IssueMilestone(tips...)
+
 	return nil
 }
 
@@ -447,6 +450,7 @@ func (env *FaucetTestEnv) FlushRequestsAndConfirmNewFaucetBlock() error {
 
 	// issue milestone on top of new faucet message
 	_, _ = env.IssueMilestone(tips...)
+
 	return nil
 }
 

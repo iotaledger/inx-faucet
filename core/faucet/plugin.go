@@ -88,8 +88,10 @@ func provide(c *dig.Container) error {
 				if ok && st.Code() == codes.NotFound {
 					return nil, nil
 				}
+
 				return nil, err
 			}
+
 			return &faucet.Metadata{
 				IsReferenced:   metadata.GetReferencedByMilestoneIndex() != 0,
 				IsConflicting:  metadata.GetConflictReason() != inx.BlockMetadata_CONFLICT_REASON_NONE,
@@ -200,6 +202,7 @@ func run() error {
 			if err != nil {
 				deps.ShutdownHandler.SelfShutdown(fmt.Sprintf("faucet plugin hit a critical error while applying new ledger update: %s", err.Error()), true)
 			}
+
 			return err
 		}); err != nil {
 			deps.ShutdownHandler.SelfShutdown(fmt.Sprintf("Listening to LedgerUpdates failed, error: %s", err), false)
@@ -230,6 +233,7 @@ func run() error {
 			CoreComponent.LogWarnf("Stopped faucet website server due to an error (%s)", err)
 		}
 	}()
+
 	return nil
 }
 
@@ -253,5 +257,6 @@ func loadEd25519PrivateKeysFromEnvironment(name string) ([]ed25519.PrivateKey, e
 		}
 		privateKeys = append(privateKeys, privateKey)
 	}
+
 	return privateKeys, nil
 }
