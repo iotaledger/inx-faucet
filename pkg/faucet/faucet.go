@@ -74,8 +74,8 @@ type pendingTransaction struct {
 	TransactionID  iotago.TransactionID
 }
 
-// FaucetInfoResponse defines the response of a GET RouteFaucetInfo REST API call.
-type FaucetInfoResponse struct {
+// InfoResponse defines the response of a GET RouteFaucetInfo REST API call.
+type InfoResponse struct {
 	// The bech32 address of the faucet.
 	Address string `json:"address"`
 	// The remaining balance of faucet.
@@ -83,11 +83,11 @@ type FaucetInfoResponse struct {
 	// The name of the token of the faucet.
 	TokenName string `json:"tokenName"`
 	// The Bech32 human readable part of the the faucet.
-	Bech32HRP iotago.NetworkPrefix `json:"bech32HRP"`
+	Bech32HRP iotago.NetworkPrefix `json:"bech32Hrp"`
 }
 
-// FaucetEnqueueResponse defines the response of a POST RouteFaucetEnqueue REST API call.
-type FaucetEnqueueResponse struct {
+// EnqueueResponse defines the response of a POST RouteFaucetEnqueue REST API call.
+type EnqueueResponse struct {
 	// The bech32 address.
 	Address string `json:"address"`
 	// The number of waiting requests in the queue.
@@ -239,6 +239,7 @@ func WithBatchTimeout(timeout time.Duration) Option {
 type Option func(opts *Options)
 
 func BlockIDCaller(handler interface{}, params ...interface{}) {
+	//nolint:forcetypeassert // we will replace that with generic events anyway
 	handler.(func(blockID iotago.BlockID))(params[0].(iotago.BlockID))
 }
 
@@ -291,9 +292,10 @@ func (f *Faucet) init() {
 }
 
 // Info returns the used faucet address and remaining balance.
-func (f *Faucet) Info() (*FaucetInfoResponse, error) {
+func (f *Faucet) Info() (*InfoResponse, error) {
 	protocolParams := f.protocolParamsFunc()
-	return &FaucetInfoResponse{
+
+	return &InfoResponse{
 		Address:   f.address.Bech32(protocolParams.Bech32HRP),
 		Balance:   f.faucetBalance,
 		TokenName: f.opts.tokenName,
@@ -304,7 +306,7 @@ func (f *Faucet) Info() (*FaucetInfoResponse, error) {
 func (f *Faucet) collectUnspentBasicOutputsWithoutConstraints(address iotago.Address) ([]UTXOOutput, uint64, error) {
 
 	outputs, err := f.collectOutputsFunc(address)
-	if err != err {
+	if err != nil {
 		return nil, 0, err
 	}
 
@@ -318,11 +320,12 @@ func (f *Faucet) collectUnspentBasicOutputsWithoutConstraints(address iotago.Add
 
 func (f *Faucet) computeAddressBalance(address iotago.Address) (uint64, error) {
 	_, balance, err := f.collectUnspentBasicOutputsWithoutConstraints(address)
+
 	return balance, err
 }
 
 // Enqueue adds a new faucet request to the queue.
-func (f *Faucet) Enqueue(bech32Addr string) (*FaucetEnqueueResponse, error) {
+func (f *Faucet) Enqueue(bech32Addr string) (*EnqueueResponse, error) {
 
 	addr, err := f.parseBech32Address(bech32Addr)
 	if err != nil {
@@ -330,6 +333,7 @@ func (f *Faucet) Enqueue(bech32Addr string) (*FaucetEnqueueResponse, error) {
 	}
 
 	if !f.nodeSyncedFunc() {
+		//nolint:stylecheck,revive // this error message is shown to the user
 		return nil, errors.WithMessage(echo.ErrInternalServerError, "Faucet node is not synchronized. Please try again later!")
 	}
 
@@ -337,6 +341,7 @@ func (f *Faucet) Enqueue(bech32Addr string) (*FaucetEnqueueResponse, error) {
 	defer f.Unlock()
 
 	if _, exists := f.queueMap[bech32Addr]; exists {
+		//nolint:stylecheck,revive // this error message is shown to the user
 		return nil, errors.WithMessage(httpserver.ErrInvalidParameter, "Address is already in the queue.")
 	}
 
@@ -346,11 +351,13 @@ func (f *Faucet) Enqueue(bech32Addr string) (*FaucetEnqueueResponse, error) {
 		amount = f.opts.smallAmount
 
 		if balance >= f.opts.maxAddressBalance {
+			//nolint:stylecheck,revive // this error message is shown to the user
 			return nil, errors.WithMessage(httpserver.ErrInvalidParameter, "You already have enough funds on your address.")
 		}
 	}
 
 	if amount > f.faucetBalance {
+		//nolint:stylecheck,revive // this error message is shown to the user
 		return nil, errors.WithMessage(echo.ErrInternalServerError, "Faucet does not have enough funds to process your request. Please try again later!")
 	}
 
@@ -364,13 +371,15 @@ func (f *Faucet) Enqueue(bech32Addr string) (*FaucetEnqueueResponse, error) {
 	case f.queue <- request:
 		f.faucetBalance -= amount
 		f.queueMap[bech32Addr] = request
-		return &FaucetEnqueueResponse{
+
+		return &EnqueueResponse{
 			Address:         bech32Addr,
 			WaitingRequests: len(f.queueMap),
 		}, nil
 
 	default:
 		// queue is full
+		//nolint:stylecheck,revive // this error message is shown to the user
 		return nil, errors.WithMessage(echo.ErrInternalServerError, "Faucet queue is full. Please try again later!")
 	}
 }
@@ -385,11 +394,13 @@ func (f *Faucet) parseBech32Address(bech32Addr string) (iotago.Address, error) {
 
 	hrp, bech32Address, err := iotago.ParseBech32(bech32Addr)
 	if err != nil {
+		//nolint:stylecheck,revive // this error message is shown to the user
 		return nil, errors.WithMessage(httpserver.ErrInvalidParameter, "Invalid bech32 address provided!")
 	}
 
 	protocolParams := f.protocolParamsFunc()
 	if hrp != protocolParams.Bech32HRP {
+		//nolint:stylecheck,revive // this error message is shown to the user
 		return nil, errors.WithMessagef(httpserver.ErrInvalidParameter, "Invalid bech32 address provided! Address does not start with \"%s\".", protocolParams.Bech32HRP)
 	}
 
@@ -532,13 +543,18 @@ func (f *Faucet) buildTransactionPayload(unspentOutputs []UTXOOutput, batchedReq
 	found := false
 	var outputIndex uint16 = 0
 	for _, output := range txPayload.Essence.Outputs {
-		basicOutput := output.(*iotago.BasicOutput)
+		basicOutput, ok := output.(*iotago.BasicOutput)
+		if !ok {
+			panic(fmt.Sprintf("invalid type: expected *iotago.BasicOutput, got %T", output))
+		}
+
 		addr := basicOutput.UnlockConditionSet().Address().Address
 
 		if f.address.Equal(addr) {
 			// found the remainder address in the outputs
 			found = true
 			remainderOutput.TransactionOutputIndex = outputIndex
+
 			break
 		}
 		outputIndex++
@@ -639,6 +655,7 @@ CollectValues:
 					break CollectValues
 				}
 			}
+
 			break CollectValues
 
 		case request := <-f.queue:
@@ -663,18 +680,21 @@ func (f *Faucet) processRequestsWithoutLocking(collectedRequestsCounter int, amo
 		if !nodeSynced {
 			// request can't be processed because the node is not synchronized => re-add it to the queue
 			unprocessedBatchedRequests = append(unprocessedBatchedRequests, request)
+
 			continue
 		}
 
 		if collectedRequestsCounter >= f.opts.maxOutputCount-1 {
 			// request can't be processed in this transaction => re-add it to the queue
 			unprocessedBatchedRequests = append(unprocessedBatchedRequests, request)
+
 			continue
 		}
 
 		if amount < request.Amount {
 			// not enough funds to process this request => ignore the request
 			f.clearRequestWithoutLocking(request)
+
 			continue
 		}
 
@@ -695,7 +715,7 @@ func (f *Faucet) RunFaucetLoop(ctx context.Context, initDoneCallback func()) err
 	// set initial faucet balance
 	faucetBalance, err := f.computeAddressBalance(f.address)
 	if err != nil {
-		return common.CriticalError(fmt.Errorf("reading faucet address balance failed: %s, error: %s", f.address.Bech32(f.protocolParamsFunc().Bech32HRP), err))
+		return common.CriticalError(fmt.Errorf("reading faucet address balance failed: %s, error: %w", f.address.Bech32(f.protocolParamsFunc().Bech32HRP), err))
 	}
 	f.faucetBalance = faucetBalance
 
@@ -713,7 +733,7 @@ func (f *Faucet) RunFaucetLoop(ctx context.Context, initDoneCallback func()) err
 			// first collect requests
 			batchedRequests, err := f.collectRequests(ctx)
 			if err != nil {
-				if err == common.ErrOperationAborted {
+				if errors.Is(err, common.ErrOperationAborted) {
 					return nil
 				}
 				if common.IsCriticalError(err) != nil {
@@ -722,6 +742,7 @@ func (f *Faucet) RunFaucetLoop(ctx context.Context, initDoneCallback func()) err
 					return err
 				}
 				f.logSoftError(err)
+
 				continue
 			}
 
@@ -733,6 +754,7 @@ func (f *Faucet) RunFaucetLoop(ctx context.Context, initDoneCallback func()) err
 					// since it's creating transaction could also have consumed the same UTXOs.
 					return []UTXOOutput{*f.lastRemainderOutput}, f.lastRemainderOutput.Output.Deposit(), nil
 				}
+
 				return f.collectUnspentBasicOutputsWithoutConstraints(f.address)
 			}
 
@@ -765,7 +787,7 @@ func (f *Faucet) RunFaucetLoop(ctx context.Context, initDoneCallback func()) err
 
 			unspentOutputs, processableRequests, tips, err := processRequests()
 			if err != nil {
-				if err != ErrNothingToProcess {
+				if !errors.Is(err, ErrNothingToProcess) {
 					if common.IsCriticalError(err) != nil {
 						// error is a critical error
 						// => stop the faucet
@@ -773,6 +795,7 @@ func (f *Faucet) RunFaucetLoop(ctx context.Context, initDoneCallback func()) err
 					}
 					f.logSoftError(err)
 				}
+
 				continue
 			}
 
@@ -784,6 +807,7 @@ func (f *Faucet) RunFaucetLoop(ctx context.Context, initDoneCallback func()) err
 				}
 				f.readdRequestsWithoutLocking(processableRequests)
 				f.logSoftError(err)
+
 				continue
 			}
 		}
@@ -826,6 +850,7 @@ func (f *Faucet) ApplyNewLedgerUpdate(createdOutputs iotago.OutputIDs, consumedO
 		for _, consumedInput := range pendingTx.ConsumedInputs {
 			if _, spent := newSpentsMap[consumedInput]; spent {
 				inputWasSpent = true
+
 				break
 			}
 		}
@@ -868,6 +893,7 @@ func (f *Faucet) ApplyNewLedgerUpdate(createdOutputs iotago.OutputIDs, consumedO
 			conflicting = true
 			f.readdRequestsWithoutLocking(pendingTx.QueuedItems)
 			f.clearPendingTransactionWithoutLocking(blockID)
+
 			return
 		}
 		if metadata == nil {
@@ -875,6 +901,7 @@ func (f *Faucet) ApplyNewLedgerUpdate(createdOutputs iotago.OutputIDs, consumedO
 			conflicting = true
 			f.readdRequestsWithoutLocking(pendingTx.QueuedItems)
 			f.clearPendingTransactionWithoutLocking(blockID)
+
 			return
 		}
 
@@ -884,12 +911,14 @@ func (f *Faucet) ApplyNewLedgerUpdate(createdOutputs iotago.OutputIDs, consumedO
 				conflicting = true
 				f.readdRequestsWithoutLocking(pendingTx.QueuedItems)
 				f.clearPendingTransactionWithoutLocking(blockID)
+
 				return
 			}
 
 			// transaction was confirmed => delete the requests and the pending transaction
 			f.clearRequestsWithoutLocking(pendingTx.QueuedItems)
 			f.clearPendingTransactionWithoutLocking(blockID)
+
 			return
 		}
 
@@ -916,8 +945,7 @@ func (f *Faucet) ApplyNewLedgerUpdate(createdOutputs iotago.OutputIDs, consumedO
 		if metadata == nil {
 			// block unknown => mark the chain as conflicting
 			conflicting = true
-		}
-		if metadata.ShouldReattach {
+		} else if metadata.ShouldReattach {
 			// block was below max depth => mark the chain as conflicting
 			conflicting = true
 		}
@@ -945,14 +973,16 @@ func (f *Faucet) ApplyNewLedgerUpdate(createdOutputs iotago.OutputIDs, consumedO
 	// no need to lock since we are in the milestone confirmation anyway
 	faucetBalance, err := f.computeAddressBalance(f.address)
 	if err != nil {
-		return common.CriticalError(fmt.Errorf("reading faucet address balance failed: %s, error: %s", f.address.Bech32(f.protocolParamsFunc().Bech32HRP), err))
+		return common.CriticalError(fmt.Errorf("reading faucet address balance failed: %s, error: %w", f.address.Bech32(f.protocolParamsFunc().Bech32HRP), err))
 	}
 
 	if faucetBalance < pendingRequestsBalance {
 		f.faucetBalance = 0
+
 		return nil
 	}
 
 	f.faucetBalance = faucetBalance - pendingRequestsBalance
+
 	return nil
 }

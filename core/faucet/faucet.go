@@ -8,11 +8,11 @@ import (
 	"github.com/iotaledger/inx-faucet/pkg/faucet"
 )
 
-func getFaucetInfo(_ echo.Context) (*faucet.FaucetInfoResponse, error) {
+func getFaucetInfo(_ echo.Context) (*faucet.InfoResponse, error) {
 	return deps.Faucet.Info()
 }
 
-func addFaucetOutputToQueue(c echo.Context) (*faucet.FaucetEnqueueResponse, error) {
+func addFaucetOutputToQueue(c echo.Context) (*faucet.EnqueueResponse, error) {
 
 	request := &faucetEnqueueRequest{}
 	if err := c.Bind(request); err != nil {

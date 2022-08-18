@@ -1,4 +1,4 @@
-package test
+package faucet_test
 
 import (
 	"context"
@@ -171,6 +171,7 @@ func NewFaucetTestEnv(t *testing.T,
 	fetchMetadataFunc := func(blockID iotago.BlockID) (*faucet.Metadata, error) {
 		metadata := te.Storage().CachedBlockMetadataOrNil(blockID) // meta +1
 		if metadata == nil {
+			//nolint:nilnil // nil, nil is ok in this context, even if it is not go idiomatic
 			return nil, nil
 		}
 		metadata.Release(true) // meta -1
@@ -203,11 +204,17 @@ func NewFaucetTestEnv(t *testing.T,
 			return nil, err
 		}
 		for _, output := range outputs {
+			basicOutput, ok := output.Output().(*iotago.BasicOutput)
+			if !ok {
+				panic(fmt.Sprintf("invalid type: expected *iotago.BasicOutput, got %T", output.Output()))
+			}
+
 			faucetOutputs = append(faucetOutputs, faucet.UTXOOutput{
 				OutputID: output.OutputID(),
-				Output:   output.Output().(*iotago.BasicOutput),
+				Output:   basicOutput,
 			})
 		}
+
 		return faucetOutputs, nil
 	}
 
@@ -413,6 +420,7 @@ func (env *FaucetTestEnv) RequestFunds(wallets ...*utils.HDWallet) (iotago.Block
 				return err
 			}
 		}
+
 		return nil
 	})
 	if err != nil {
@@ -433,6 +441,7 @@ func (env *FaucetTestEnv) RequestFundsAndIssueMilestone(wallets ...*utils.HDWall
 
 	// issue milestone on top of new faucet message
 	_, _ = env.IssueMilestone(tips...)
+
 	return nil
 }
 
@@ -447,6 +456,7 @@ func (env *FaucetTestEnv) FlushRequestsAndConfirmNewFaucetBlock() error {
 
 	// issue milestone on top of new faucet message
 	_, _ = env.IssueMilestone(tips...)
+
 	return nil
 }
 

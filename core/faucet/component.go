@@ -71,7 +71,12 @@ func provide(c *dig.Container) error {
 		CoreComponent.LogPanic("loading faucet private key failed, err: wrong private key length")
 	}
 
-	faucetAddress := iotago.Ed25519AddressFromPubKey(privateKey.Public().(ed25519.PublicKey))
+	publicKey, ok := privateKey.Public().(ed25519.PublicKey)
+	if !ok {
+		panic(fmt.Sprintf("invalid type: expected ed25519.PublicKey, got %T", privateKey.Public()))
+	}
+
+	faucetAddress := iotago.Ed25519AddressFromPubKey(publicKey)
 	faucetSigner := iotago.NewInMemoryAddressSigner(iotago.NewAddressKeysForEd25519Address(&faucetAddress, privateKey))
 
 	type faucetDeps struct {
@@ -86,12 +91,16 @@ func provide(c *dig.Container) error {
 			if err != nil {
 				st, ok := status.FromError(err)
 				if ok && st.Code() == codes.NotFound {
+					//nolint:nilnil // nil, nil is ok in this context, even if it is not go idiomatic
 					return nil, nil
 				}
+
 				return nil, err
 			}
+
 			return &faucet.Metadata{
-				IsReferenced:   metadata.GetReferencedByMilestoneIndex() != 0,
+				IsReferenced: metadata.GetReferencedByMilestoneIndex() != 0,
+				//nolint:nosnakecase // grpc uses underscores
 				IsConflicting:  metadata.GetConflictReason() != inx.BlockMetadata_CONFLICT_REASON_NONE,
 				ShouldReattach: metadata.GetShouldReattach(),
 			}, nil
@@ -136,9 +145,16 @@ func provide(c *dig.Container) error {
 				outputIDs := result.Response.Items.MustOutputIDs()
 
 				for i := range outputs {
+					basicOutput, ok := outputs[i].(*iotago.BasicOutput)
+					if !ok {
+						CoreComponent.LogWarnf("invalid type: expected *iotago.BasicOutput, got %T", outputs[i])
+
+						continue
+					}
+
 					faucetOutputs = append(faucetOutputs, faucet.UTXOOutput{
 						OutputID: outputIDs[i],
-						Output:   outputs[i].(*iotago.BasicOutput),
+						Output:   basicOutput,
 					})
 				}
 			}
@@ -185,7 +201,7 @@ func provide(c *dig.Container) error {
 func run() error {
 
 	// create a background worker that handles the ledger updates
-	CoreComponent.Daemon().BackgroundWorker("Faucet[LedgerUpdates]", func(ctx context.Context) {
+	if err := CoreComponent.Daemon().BackgroundWorker("Faucet[LedgerUpdates]", func(ctx context.Context) {
 		if err := deps.NodeBridge.ListenToLedgerUpdates(ctx, 0, 0, func(update *nodebridge.LedgerUpdate) error {
 			createdOutputs := iotago.OutputIDs{}
 			for _, output := range update.Created {
@@ -200,11 +216,14 @@ func run() error {
 			if err != nil {
 				deps.ShutdownHandler.SelfShutdown(fmt.Sprintf("faucet plugin hit a critical error while applying new ledger update: %s", err.Error()), true)
 			}
+
 			return err
 		}); err != nil {
 			deps.ShutdownHandler.SelfShutdown(fmt.Sprintf("Listening to LedgerUpdates failed, error: %s", err), false)
 		}
-	}, daemon.PriorityStopFaucetLedgerUpdates)
+	}, daemon.PriorityStopFaucetLedgerUpdates); err != nil {
+		CoreComponent.LogPanicf("failed to start worker: %s", err)
+	}
 
 	// create a background worker that handles the enqueued faucet requests
 	if err := CoreComponent.Daemon().BackgroundWorker("Faucet", func(ctx context.Context) {
@@ -230,6 +249,7 @@ func run() error {
 			CoreComponent.LogWarnf("Stopped faucet website server due to an error (%s)", err)
 		}
 	}()
+
 	return nil
 }
 
@@ -244,14 +264,16 @@ func loadEd25519PrivateKeysFromEnvironment(name string) ([]ed25519.PrivateKey, e
 		return nil, fmt.Errorf("environment variable '%s' not set", name)
 	}
 
-	var privateKeys []ed25519.PrivateKey
-	for _, key := range strings.Split(keys, ",") {
+	privateKeysSplitted := strings.Split(keys, ",")
+	privateKeys := make([]ed25519.PrivateKey, len(privateKeysSplitted))
+	for i, key := range privateKeysSplitted {
 		privateKey, err := crypto.ParseEd25519PrivateKeyFromString(key)
 		if err != nil {
 			return nil, fmt.Errorf("environment variable '%s' contains an invalid private key '%s'", name, key)
 
 		}
-		privateKeys = append(privateKeys, privateKey)
+		privateKeys[i] = privateKey
 	}
+
 	return privateKeys, nil
 }

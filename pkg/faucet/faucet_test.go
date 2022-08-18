@@ -6,7 +6,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/iotaledger/inx-faucet/pkg/faucet/test"
+	faucet_test "github.com/iotaledger/inx-faucet/pkg/faucet/test"
 	iotago "github.com/iotaledger/iota.go/v3"
 )
 
@@ -21,7 +21,7 @@ func TestSingleRequest(t *testing.T) {
 	var faucetSmallAmount uint64 = 1_000_000        //  1 Mi
 	var faucetMaxAddressBalance uint64 = 20_000_000 // 20 Mi
 
-	env := test.NewFaucetTestEnv(t,
+	env := faucet_test.NewFaucetTestEnv(t,
 		faucetBalance,
 		wallet1Balance,
 		wallet2Balance,
@@ -83,7 +83,7 @@ func TestMultipleRequests(t *testing.T) {
 	var faucetSmallAmount uint64 = 1_000_000        //  1 Mi
 	var faucetMaxAddressBalance uint64 = 20_000_000 // 20 Mi
 
-	env := test.NewFaucetTestEnv(t,
+	env := faucet_test.NewFaucetTestEnv(t,
 		faucetBalance,
 		wallet1Balance,
 		wallet2Balance,
@@ -175,7 +175,7 @@ func TestDoubleSpent(t *testing.T) {
 	var faucetSmallAmount uint64 = 1_000_000        //  1 Mi
 	var faucetMaxAddressBalance uint64 = 20_000_000 // 20 Mi
 
-	env := test.NewFaucetTestEnv(t,
+	env := faucet_test.NewFaucetTestEnv(t,
 		faucetBalance,
 		wallet1Balance,
 		wallet2Balance,
@@ -251,7 +251,7 @@ func TestBelowMaxDepth(t *testing.T) {
 	var faucetSmallAmount uint64 = 1_000_000        //  1 Mi
 	var faucetMaxAddressBalance uint64 = 20_000_000 // 20 Mi
 
-	env := test.NewFaucetTestEnv(t,
+	env := faucet_test.NewFaucetTestEnv(t,
 		faucetBalance,
 		wallet1Balance,
 		wallet2Balance,
@@ -285,7 +285,7 @@ func TestBelowMaxDepth(t *testing.T) {
 	// LastMilestoneBlockID as a tip for the faucet, but the milestone block
 	// itself is part of the future cone, so it needs to be BMD+1 milestones
 	// to become below max depth.
-	for i := 0; i <= test.BelowMaxDepth+1; i++ {
+	for i := 0; i <= faucet_test.BelowMaxDepth+1; i++ {
 		_, _ = env.IssueMilestone()
 	}
 
@@ -317,7 +317,7 @@ func TestBelowMaxDepthAfterRequest(t *testing.T) {
 	var faucetSmallAmount uint64 = 1_000_000        //  1 Mi
 	var faucetMaxAddressBalance uint64 = 20_000_000 // 20 Mi
 
-	env := test.NewFaucetTestEnv(t,
+	env := faucet_test.NewFaucetTestEnv(t,
 		faucetBalance,
 		wallet1Balance,
 		wallet2Balance,
@@ -356,7 +356,7 @@ func TestBelowMaxDepthAfterRequest(t *testing.T) {
 	// LastMilestoneBlockID as a tip for the faucet, but the milestone block
 	// itself is part of the future cone, so it needs to be BMD+1 milestones
 	// to become below max depth.
-	for i := 0; i <= test.BelowMaxDepth+1; i++ {
+	for i := 0; i <= faucet_test.BelowMaxDepth+1; i++ {
 		_, _ = env.IssueMilestone()
 	}
 
@@ -382,7 +382,7 @@ func TestNotEnoughFaucetFunds(t *testing.T) {
 	var faucetSmallAmount uint64 = 1_000_000        //  1 Mi
 	var faucetMaxAddressBalance uint64 = 20_000_000 // 20 Mi
 
-	env := test.NewFaucetTestEnv(t,
+	env := faucet_test.NewFaucetTestEnv(t,
 		faucetBalance,
 		wallet1Balance,
 		wallet2Balance,
@@ -436,7 +436,7 @@ func TestCollectFaucetFunds(t *testing.T) {
 	var faucetSmallAmount uint64 = 1_000_000        //  1 Mi
 	var faucetMaxAddressBalance uint64 = 20_000_000 // 20 Mi
 
-	env := test.NewFaucetTestEnv(t,
+	env := faucet_test.NewFaucetTestEnv(t,
 		faucetBalance,
 		wallet1Balance,
 		wallet2Balance,

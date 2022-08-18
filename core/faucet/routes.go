@@ -18,7 +18,7 @@ import (
 const (
 
 	// RouteFaucetInfo is the route to give info about the faucet address.
-	// GET returns address, balance, bech32HRP and tokenName of the faucet.
+	// GET returns address, balance, bech32Hrp and tokenName of the faucet.
 	RouteFaucetInfo = "/info"
 
 	// RouteFaucetEnqueue is the route to tell the faucet to pay out some funds to the given address.
@@ -31,6 +31,7 @@ func enforceMaxOneDotPerURL(next echo.HandlerFunc) echo.HandlerFunc {
 		if strings.Count(c.Request().URL.Path, "..") != 0 {
 			return c.String(http.StatusForbidden, "path not allowed")
 		}
+
 		return next(c)
 	}
 }
@@ -38,7 +39,6 @@ func enforceMaxOneDotPerURL(next echo.HandlerFunc) echo.HandlerFunc {
 func setupRoutes(e *echo.Echo) {
 
 	e.Pre(enforceMaxOneDotPerURL)
-	//e.Use(middleware.CSRF())
 
 	e.Group("/*").Use(frontendMiddleware())
 
@@ -79,6 +79,7 @@ func setupRoutes(e *echo.Echo) {
 		),
 		IdentifierExtractor: func(ctx echo.Context) (string, error) {
 			id := ctx.RealIP()
+
 			return id, nil
 		},
 		ErrorHandler: func(context echo.Context, err error) error {
