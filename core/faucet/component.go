@@ -91,6 +91,7 @@ func provide(c *dig.Container) error {
 			if err != nil {
 				st, ok := status.FromError(err)
 				if ok && st.Code() == codes.NotFound {
+					//nolint:nilnil // nil, nil is ok in this context, even if it is not go idiomatic
 					return nil, nil
 				}
 

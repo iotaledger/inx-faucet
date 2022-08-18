@@ -171,6 +171,7 @@ func NewFaucetTestEnv(t *testing.T,
 	fetchMetadataFunc := func(blockID iotago.BlockID) (*faucet.Metadata, error) {
 		metadata := te.Storage().CachedBlockMetadataOrNil(blockID) // meta +1
 		if metadata == nil {
+			//nolint:nilnil // nil, nil is ok in this context, even if it is not go idiomatic
 			return nil, nil
 		}
 		metadata.Release(true) // meta -1
