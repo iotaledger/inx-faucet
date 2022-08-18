@@ -39,7 +39,6 @@ func enforceMaxOneDotPerURL(next echo.HandlerFunc) echo.HandlerFunc {
 func setupRoutes(e *echo.Echo) {
 
 	e.Pre(enforceMaxOneDotPerURL)
-	//e.Use(middleware.CSRF())
 
 	e.Group("/*").Use(frontendMiddleware())
 

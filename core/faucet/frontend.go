@@ -46,7 +46,7 @@ func frontendMiddleware() echo.MiddlewareFunc {
 	fs := frontendFileSystem()
 
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
-		return func(c echo.Context) (err error) {
+		return func(c echo.Context) error {
 			contentType := calculateMimeType(c)
 
 			path := strings.TrimPrefix(c.Request().URL.Path, "/")
