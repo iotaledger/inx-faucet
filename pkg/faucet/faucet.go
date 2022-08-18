@@ -83,8 +83,7 @@ type InfoResponse struct {
 	// The name of the token of the faucet.
 	TokenName string `json:"tokenName"`
 	// The Bech32 human readable part of the the faucet.
-	//nolint:tagliatelle // false positive
-	Bech32HRP iotago.NetworkPrefix `json:"bech32HRP"`
+	Bech32HRP iotago.NetworkPrefix `json:"bech32Hrp"`
 }
 
 // EnqueueResponse defines the response of a POST RouteFaucetEnqueue REST API call.
