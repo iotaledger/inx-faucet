@@ -99,7 +99,8 @@ func provide(c *dig.Container) error {
 			}
 
 			return &faucet.Metadata{
-				IsReferenced:   metadata.GetReferencedByMilestoneIndex() != 0,
+				IsReferenced: metadata.GetReferencedByMilestoneIndex() != 0,
+				//nolint:nosnakecase // grpc uses underscores
 				IsConflicting:  metadata.GetConflictReason() != inx.BlockMetadata_CONFLICT_REASON_NONE,
 				ShouldReattach: metadata.GetShouldReattach(),
 			}, nil
