@@ -74,8 +74,8 @@ type pendingTransaction struct {
 	TransactionID  iotago.TransactionID
 }
 
-// FaucetInfoResponse defines the response of a GET RouteFaucetInfo REST API call.
-type FaucetInfoResponse struct {
+// InfoResponse defines the response of a GET RouteFaucetInfo REST API call.
+type InfoResponse struct {
 	// The bech32 address of the faucet.
 	Address string `json:"address"`
 	// The remaining balance of faucet.
@@ -86,8 +86,8 @@ type FaucetInfoResponse struct {
 	Bech32HRP iotago.NetworkPrefix `json:"bech32HRP"`
 }
 
-// FaucetEnqueueResponse defines the response of a POST RouteFaucetEnqueue REST API call.
-type FaucetEnqueueResponse struct {
+// EnqueueResponse defines the response of a POST RouteFaucetEnqueue REST API call.
+type EnqueueResponse struct {
 	// The bech32 address.
 	Address string `json:"address"`
 	// The number of waiting requests in the queue.
@@ -292,10 +292,10 @@ func (f *Faucet) init() {
 }
 
 // Info returns the used faucet address and remaining balance.
-func (f *Faucet) Info() (*FaucetInfoResponse, error) {
+func (f *Faucet) Info() (*InfoResponse, error) {
 	protocolParams := f.protocolParamsFunc()
 
-	return &FaucetInfoResponse{
+	return &InfoResponse{
 		Address:   f.address.Bech32(protocolParams.Bech32HRP),
 		Balance:   f.faucetBalance,
 		TokenName: f.opts.tokenName,
@@ -325,7 +325,7 @@ func (f *Faucet) computeAddressBalance(address iotago.Address) (uint64, error) {
 }
 
 // Enqueue adds a new faucet request to the queue.
-func (f *Faucet) Enqueue(bech32Addr string) (*FaucetEnqueueResponse, error) {
+func (f *Faucet) Enqueue(bech32Addr string) (*EnqueueResponse, error) {
 
 	addr, err := f.parseBech32Address(bech32Addr)
 	if err != nil {
@@ -333,6 +333,7 @@ func (f *Faucet) Enqueue(bech32Addr string) (*FaucetEnqueueResponse, error) {
 	}
 
 	if !f.nodeSyncedFunc() {
+		//nolint:stylecheck,revive // this error message is shown to the user
 		return nil, errors.WithMessage(echo.ErrInternalServerError, "Faucet node is not synchronized. Please try again later!")
 	}
 
@@ -340,6 +341,7 @@ func (f *Faucet) Enqueue(bech32Addr string) (*FaucetEnqueueResponse, error) {
 	defer f.Unlock()
 
 	if _, exists := f.queueMap[bech32Addr]; exists {
+		//nolint:stylecheck,revive // this error message is shown to the user
 		return nil, errors.WithMessage(httpserver.ErrInvalidParameter, "Address is already in the queue.")
 	}
 
@@ -349,11 +351,13 @@ func (f *Faucet) Enqueue(bech32Addr string) (*FaucetEnqueueResponse, error) {
 		amount = f.opts.smallAmount
 
 		if balance >= f.opts.maxAddressBalance {
+			//nolint:stylecheck,revive // this error message is shown to the user
 			return nil, errors.WithMessage(httpserver.ErrInvalidParameter, "You already have enough funds on your address.")
 		}
 	}
 
 	if amount > f.faucetBalance {
+		//nolint:stylecheck,revive // this error message is shown to the user
 		return nil, errors.WithMessage(echo.ErrInternalServerError, "Faucet does not have enough funds to process your request. Please try again later!")
 	}
 
@@ -368,13 +372,14 @@ func (f *Faucet) Enqueue(bech32Addr string) (*FaucetEnqueueResponse, error) {
 		f.faucetBalance -= amount
 		f.queueMap[bech32Addr] = request
 
-		return &FaucetEnqueueResponse{
+		return &EnqueueResponse{
 			Address:         bech32Addr,
 			WaitingRequests: len(f.queueMap),
 		}, nil
 
 	default:
 		// queue is full
+		//nolint:stylecheck,revive // this error message is shown to the user
 		return nil, errors.WithMessage(echo.ErrInternalServerError, "Faucet queue is full. Please try again later!")
 	}
 }
@@ -389,11 +394,13 @@ func (f *Faucet) parseBech32Address(bech32Addr string) (iotago.Address, error) {
 
 	hrp, bech32Address, err := iotago.ParseBech32(bech32Addr)
 	if err != nil {
+		//nolint:stylecheck,revive // this error message is shown to the user
 		return nil, errors.WithMessage(httpserver.ErrInvalidParameter, "Invalid bech32 address provided!")
 	}
 
 	protocolParams := f.protocolParamsFunc()
 	if hrp != protocolParams.Bech32HRP {
+		//nolint:stylecheck,revive // this error message is shown to the user
 		return nil, errors.WithMessagef(httpserver.ErrInvalidParameter, "Invalid bech32 address provided! Address does not start with \"%s\".", protocolParams.Bech32HRP)
 	}
 
