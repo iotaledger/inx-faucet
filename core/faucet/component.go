@@ -187,7 +187,7 @@ func provide(c *dig.Container) error {
 func run() error {
 
 	// create a background worker that handles the ledger updates
-	CoreComponent.Daemon().BackgroundWorker("Faucet[LedgerUpdates]", func(ctx context.Context) {
+	if err := CoreComponent.Daemon().BackgroundWorker("Faucet[LedgerUpdates]", func(ctx context.Context) {
 		if err := deps.NodeBridge.ListenToLedgerUpdates(ctx, 0, 0, func(update *nodebridge.LedgerUpdate) error {
 			createdOutputs := iotago.OutputIDs{}
 			for _, output := range update.Created {
@@ -207,7 +207,9 @@ func run() error {
 		}); err != nil {
 			deps.ShutdownHandler.SelfShutdown(fmt.Sprintf("Listening to LedgerUpdates failed, error: %s", err), false)
 		}
-	}, daemon.PriorityStopFaucetLedgerUpdates)
+	}, daemon.PriorityStopFaucetLedgerUpdates); err != nil {
+		CoreComponent.LogPanicf("failed to start worker: %s", err)
+	}
 
 	// create a background worker that handles the enqueued faucet requests
 	if err := CoreComponent.Daemon().BackgroundWorker("Faucet", func(ctx context.Context) {
