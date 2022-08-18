@@ -945,8 +945,7 @@ func (f *Faucet) ApplyNewLedgerUpdate(createdOutputs iotago.OutputIDs, consumedO
 		if metadata == nil {
 			// block unknown => mark the chain as conflicting
 			conflicting = true
-		}
-		if metadata.ShouldReattach {
+		} else if metadata.ShouldReattach {
 			// block was below max depth => mark the chain as conflicting
 			conflicting = true
 		}
