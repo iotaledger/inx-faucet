@@ -1,5 +1,5 @@
 //nolint:gosec // we don't care about these linters in test cases
-package test
+package faucet_test
 
 import (
 	"math/rand"

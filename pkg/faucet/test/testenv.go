@@ -1,4 +1,4 @@
-package test
+package faucet_test
 
 import (
 	"context"
