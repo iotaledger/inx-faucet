@@ -71,7 +71,12 @@ func provide(c *dig.Container) error {
 		CoreComponent.LogPanic("loading faucet private key failed, err: wrong private key length")
 	}
 
-	faucetAddress := iotago.Ed25519AddressFromPubKey(privateKey.Public().(ed25519.PublicKey))
+	publicKey, ok := privateKey.Public().(ed25519.PublicKey)
+	if !ok {
+		panic(fmt.Sprintf("invalid type: expected ed25519.PublicKey, got %T", privateKey.Public()))
+	}
+
+	faucetAddress := iotago.Ed25519AddressFromPubKey(publicKey)
 	faucetSigner := iotago.NewInMemoryAddressSigner(iotago.NewAddressKeysForEd25519Address(&faucetAddress, privateKey))
 
 	type faucetDeps struct {
@@ -138,9 +143,16 @@ func provide(c *dig.Container) error {
 				outputIDs := result.Response.Items.MustOutputIDs()
 
 				for i := range outputs {
+					basicOutput, ok := outputs[i].(*iotago.BasicOutput)
+					if !ok {
+						CoreComponent.LogWarnf("invalid type: expected *iotago.BasicOutput, got %T", outputs[i])
+
+						continue
+					}
+
 					faucetOutputs = append(faucetOutputs, faucet.UTXOOutput{
 						OutputID: outputIDs[i],
-						Output:   outputs[i].(*iotago.BasicOutput),
+						Output:   basicOutput,
 					})
 				}
 			}

@@ -203,9 +203,14 @@ func NewFaucetTestEnv(t *testing.T,
 			return nil, err
 		}
 		for _, output := range outputs {
+			basicOutput, ok := output.Output().(*iotago.BasicOutput)
+			if !ok {
+				panic(fmt.Sprintf("invalid type: expected *iotago.BasicOutput, got %T", output.Output()))
+			}
+
 			faucetOutputs = append(faucetOutputs, faucet.UTXOOutput{
 				OutputID: output.OutputID(),
-				Output:   output.Output().(*iotago.BasicOutput),
+				Output:   basicOutput,
 			})
 		}
 

@@ -239,6 +239,7 @@ func WithBatchTimeout(timeout time.Duration) Option {
 type Option func(opts *Options)
 
 func BlockIDCaller(handler interface{}, params ...interface{}) {
+	//nolint:forcetypeassert // we will replace that with generic events anyway
 	handler.(func(blockID iotago.BlockID))(params[0].(iotago.BlockID))
 }
 
@@ -535,7 +536,11 @@ func (f *Faucet) buildTransactionPayload(unspentOutputs []UTXOOutput, batchedReq
 	found := false
 	var outputIndex uint16 = 0
 	for _, output := range txPayload.Essence.Outputs {
-		basicOutput := output.(*iotago.BasicOutput)
+		basicOutput, ok := output.(*iotago.BasicOutput)
+		if !ok {
+			panic(fmt.Sprintf("invalid type: expected *iotago.BasicOutput, got %T", output))
+		}
+
 		addr := basicOutput.UnlockConditionSet().Address().Address
 
 		if f.address.Equal(addr) {
