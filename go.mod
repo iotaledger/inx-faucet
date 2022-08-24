@@ -14,7 +14,7 @@ require (
 	github.com/stretchr/testify v1.8.0
 	go.uber.org/dig v1.15.0
 	golang.org/x/time v0.0.0-20220722155302-e5dcc9cfc0b9
-	google.golang.org/grpc v1.48.0
+	google.golang.org/grpc v1.49.0
 )
 
 require (
