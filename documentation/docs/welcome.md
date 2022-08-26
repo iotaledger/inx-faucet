@@ -15,25 +15,23 @@ keywords:
 
 # Welcome to INX-Faucet
 
-INX-Faucet is a faucet application for test and development networks as well as for private networks.
-Faucets are useful in test and private networks to distribute test tokens to developers.
+Faucets give tokens away. This is useful when you need to distribute tokens on a test network, or distribute tokens on a private Tangle. INX-Faucet extends your node with this functionality.
 
 ## Setup
 
-The recommended setup is to use the provided [Docker images](https://hub.docker.com/r/iotaledger/inx-faucet).
+We recommend you to use the [Docker images](https://hub.docker.com/r/iotaledger/inx-faucet).
 
-If you want to run your own private network with it's own faucet, have a look at our [Run a Private Tangle](https://wiki.iota.org/hornet/develop/how_tos/private_tangle) guide.
+Faucets only make sense on private networks. For more details, see [Run a Private Tangle](https://wiki.iota.org/hornet/develop/how_tos/private_tangle).
 
-To run your own faucet you need to provide a private key containing funds to the faucet. To do this you start `inx-faucet` by passing a `FAUCET_PRV_KEY` environment variable containing the private key.
+To run your own faucet you need to provide a private key containing funds to the faucet. To do this you must launch `inx-faucet` while passing a `FAUCET_PRV_KEY` environment variable that contains the private key.
 
-The faucet includes a generic web UI that will be reachable at `http://localhost:8091` by default.
+The faucet includes a generic web GUI that is reachable at `http://localhost:8091` by default.
 
 ## Configuration
 
-The faucet is configured by default to connect to your HORNET instance.
+The participation extension connects to the local Hornet instance by default.
 
 You can find all the configuration options in the [configuration section](configuration.md).
-
 
 ## Source Code
 
