@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/pkg/errors"
@@ -87,7 +88,10 @@ func provide(c *dig.Container) error {
 	if err := c.Provide(func(deps faucetDeps) *faucet.Faucet {
 
 		fetchMetadata := func(blockID iotago.BlockID) (*faucet.Metadata, error) {
-			metadata, err := deps.NodeBridge.BlockMetadata(blockID)
+			ctx, cancel := context.WithTimeout(CoreComponent.Daemon().ContextStopped(), 5*time.Second)
+			defer cancel()
+
+			metadata, err := deps.NodeBridge.BlockMetadata(ctx, blockID)
 			if err != nil {
 				st, ok := status.FromError(err)
 				if ok && st.Code() == codes.NotFound {

@@ -471,7 +471,7 @@ func (f *Faucet) buildTransactionPayload(unspentOutputs []UTXOOutput, batchedReq
 	txBuilder.AddTaggedDataPayload(&iotago.TaggedData{Tag: f.opts.tagMessage, Data: nil})
 
 	outputCount := 0
-	var remainderAmount int64 = 0
+	var remainderAmount int64
 
 	// collect all unspent output of the faucet address
 	consumedInputs := []iotago.OutputID{}
@@ -541,7 +541,7 @@ func (f *Faucet) buildTransactionPayload(unspentOutputs []UTXOOutput, batchedReq
 
 	// search remainder address in the outputs
 	found := false
-	var outputIndex uint16 = 0
+	var outputIndex uint16
 	for _, output := range txPayload.Essence.Outputs {
 		basicOutput, ok := output.(*iotago.BasicOutput)
 		if !ok {
@@ -964,7 +964,7 @@ func (f *Faucet) ApplyNewLedgerUpdate(createdOutputs iotago.OutputIDs, consumedO
 	}
 
 	// calculate total balance of all pending requests
-	var pendingRequestsBalance uint64 = 0
+	var pendingRequestsBalance uint64
 	for _, pendingRequest := range f.queueMap {
 		pendingRequestsBalance += pendingRequest.Amount
 	}
