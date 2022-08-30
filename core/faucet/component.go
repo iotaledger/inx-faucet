@@ -56,20 +56,20 @@ func provide(c *dig.Container) error {
 
 	privateKeys, err := loadEd25519PrivateKeysFromEnvironment("FAUCET_PRV_KEY")
 	if err != nil {
-		CoreComponent.LogPanicf("loading faucet private key failed, err: %s", err)
+		CoreComponent.LogErrorfAndExit("loading faucet private key failed, err: %s", err)
 	}
 
 	if len(privateKeys) == 0 {
-		CoreComponent.LogPanic("loading faucet private key failed, err: no private keys given")
+		CoreComponent.LogErrorAndExit("loading faucet private key failed, err: no private keys given")
 	}
 
 	if len(privateKeys) > 1 {
-		CoreComponent.LogPanic("loading faucet private key failed, err: too many private keys given")
+		CoreComponent.LogErrorAndExit("loading faucet private key failed, err: too many private keys given")
 	}
 
 	privateKey := privateKeys[0]
 	if len(privateKey) != ed25519.PrivateKeySize {
-		CoreComponent.LogPanic("loading faucet private key failed, err: wrong private key length")
+		CoreComponent.LogErrorAndExit("loading faucet private key failed, err: wrong private key length")
 	}
 
 	publicKey, ok := privateKey.Public().(ed25519.PublicKey)
