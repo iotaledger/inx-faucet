@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/pkg/errors"
@@ -55,20 +56,20 @@ func provide(c *dig.Container) error {
 
 	privateKeys, err := loadEd25519PrivateKeysFromEnvironment("FAUCET_PRV_KEY")
 	if err != nil {
-		CoreComponent.LogPanicf("loading faucet private key failed, err: %s", err)
+		CoreComponent.LogErrorfAndExit("loading faucet private key failed, err: %s", err)
 	}
 
 	if len(privateKeys) == 0 {
-		CoreComponent.LogPanic("loading faucet private key failed, err: no private keys given")
+		CoreComponent.LogErrorAndExit("loading faucet private key failed, err: no private keys given")
 	}
 
 	if len(privateKeys) > 1 {
-		CoreComponent.LogPanic("loading faucet private key failed, err: too many private keys given")
+		CoreComponent.LogErrorAndExit("loading faucet private key failed, err: too many private keys given")
 	}
 
 	privateKey := privateKeys[0]
 	if len(privateKey) != ed25519.PrivateKeySize {
-		CoreComponent.LogPanic("loading faucet private key failed, err: wrong private key length")
+		CoreComponent.LogErrorAndExit("loading faucet private key failed, err: wrong private key length")
 	}
 
 	publicKey, ok := privateKey.Public().(ed25519.PublicKey)
@@ -87,7 +88,10 @@ func provide(c *dig.Container) error {
 	if err := c.Provide(func(deps faucetDeps) *faucet.Faucet {
 
 		fetchMetadata := func(blockID iotago.BlockID) (*faucet.Metadata, error) {
-			metadata, err := deps.NodeBridge.BlockMetadata(blockID)
+			ctx, cancel := context.WithTimeout(CoreComponent.Daemon().ContextStopped(), 5*time.Second)
+			defer cancel()
+
+			metadata, err := deps.NodeBridge.BlockMetadata(ctx, blockID)
 			if err != nil {
 				st, ok := status.FromError(err)
 				if ok && st.Code() == codes.NotFound {
