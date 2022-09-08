@@ -16,6 +16,7 @@ type ParametersFaucet struct {
 	BatchTimeout      time.Duration `default:"2s" usage:"the maximum duration for collecting faucet batches"`
 	BindAddress       string        `default:"localhost:8091" usage:"the bind address on which the faucet website can be accessed from"`
 	RateLimit         struct {
+		Enabled     bool          `default:"true" usage:"whether the rate limiting should be enabled"`
 		Period      time.Duration `default:"5m" usage:"the period for rate limiting"`
 		MaxRequests int           `default:"10" usage:"the maximum number of requests per period"`
 		MaxBurst    int           `default:"20" usage:"additional requests allowed in the burst period"`
