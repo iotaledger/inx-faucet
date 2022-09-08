@@ -3,13 +3,13 @@ module github.com/iotaledger/inx-faucet
 go 1.19
 
 require (
-	github.com/iotaledger/hive.go/core v1.0.0-beta.4
+	github.com/iotaledger/hive.go/core v1.0.0-beta.5
 	github.com/iotaledger/hive.go/serializer/v2 v2.0.0-beta.3
-	github.com/iotaledger/hornet/v2 v2.0.0-beta.6.0.20220830084941-1b66d4dda4a8
-	github.com/iotaledger/inx-app v1.0.0-beta.10
-	github.com/iotaledger/inx/go v1.0.0-beta.6
-	github.com/iotaledger/iota.go/v3 v3.0.0-beta.8
-	github.com/labstack/echo/v4 v4.8.0
+	github.com/iotaledger/hornet/v2 v2.0.0-beta.7.0.20220908172223-1d89869327cb
+	github.com/iotaledger/inx-app v1.0.0-beta.11
+	github.com/iotaledger/inx/go v1.0.0-beta.7
+	github.com/iotaledger/iota.go/v3 v3.0.0-beta.9
+	github.com/labstack/echo/v4 v4.9.0
 	github.com/pkg/errors v0.9.1
 	github.com/stretchr/testify v1.8.0
 	go.uber.org/dig v1.15.0
@@ -27,7 +27,7 @@ require (
 	github.com/cespare/xxhash/v2 v2.1.2 // indirect
 	github.com/cockroachdb/errors v1.9.0 // indirect
 	github.com/cockroachdb/logtags v0.0.0-20211118104740-dabe8e521a4f // indirect
-	github.com/cockroachdb/pebble v0.0.0-20220829223201-4ab85a4deff0 // indirect
+	github.com/cockroachdb/pebble v0.0.0-20220907220441-20a40b515be9 // indirect
 	github.com/cockroachdb/redact v1.1.3 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.1.0 // indirect
@@ -51,10 +51,10 @@ require (
 	github.com/hashicorp/go-version v1.6.0 // indirect
 	github.com/hashicorp/golang-lru v0.5.5-0.20210104140557-80c98217689d // indirect
 	github.com/iancoleman/orderedmap v0.2.0 // indirect
-	github.com/iotaledger/go-ds-kvstore v1.0.0-beta.3 // indirect
+	github.com/iotaledger/go-ds-kvstore v1.0.0-beta.4 // indirect
 	github.com/iotaledger/grocksdb v1.7.5-0.20220808142449-1dc0b8ac4d7d // indirect
 	github.com/iotaledger/iota.go v1.0.0 // indirect
-	github.com/ipfs/go-cid v0.3.0 // indirect
+	github.com/ipfs/go-cid v0.3.2 // indirect
 	github.com/ipfs/go-datastore v0.6.0 // indirect
 	github.com/ipfs/go-log/v2 v2.5.1 // indirect
 	github.com/jbenet/goprocess v0.1.4 // indirect
@@ -67,7 +67,6 @@ require (
 	github.com/libp2p/go-buffer-pool v0.1.0 // indirect
 	github.com/libp2p/go-libp2p v0.22.0 // indirect
 	github.com/libp2p/go-openssl v0.1.0 // indirect
-	github.com/lucas-clemente/quic-go v0.29.0 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.16 // indirect
 	github.com/mattn/go-pointer v0.0.1 // indirect
@@ -79,7 +78,7 @@ require (
 	github.com/mr-tron/base58 v1.2.0 // indirect
 	github.com/multiformats/go-base32 v0.1.0 // indirect
 	github.com/multiformats/go-base36 v0.1.0 // indirect
-	github.com/multiformats/go-multiaddr v0.6.0 // indirect
+	github.com/multiformats/go-multiaddr v0.7.0 // indirect
 	github.com/multiformats/go-multiaddr-fmt v0.1.0 // indirect
 	github.com/multiformats/go-multibase v0.1.1 // indirect
 	github.com/multiformats/go-multicodec v0.6.0 // indirect
@@ -108,13 +107,13 @@ require (
 	go.uber.org/multierr v1.8.0 // indirect
 	go.uber.org/zap v1.23.0 // indirect
 	golang.org/x/crypto v0.0.0-20220829220503-c86fa9a7ed90 // indirect
-	golang.org/x/exp v0.0.0-20220827204233-334a2380cb91 // indirect
-	golang.org/x/net v0.0.0-20220826154423-83b083e8dc8b // indirect
-	golang.org/x/sync v0.0.0-20220819030929-7fc1605a5dde // indirect
-	golang.org/x/sys v0.0.0-20220829200755-d48e67d00261 // indirect
+	golang.org/x/exp v0.0.0-20220907003533-145caa8ea1d0 // indirect
+	golang.org/x/net v0.0.0-20220907135653-1e95f45603a7 // indirect
+	golang.org/x/sync v0.0.0-20220907140024-f12130a52804 // indirect
+	golang.org/x/sys v0.0.0-20220908164124-27713097b956 // indirect
 	golang.org/x/text v0.3.7 // indirect
-	golang.org/x/xerrors v0.0.0-20220609144429-65e65417b02f // indirect
-	google.golang.org/genproto v0.0.0-20220829175752-36a9c930ecbf // indirect
+	golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2 // indirect
+	google.golang.org/genproto v0.0.0-20220908141613-51c1cc9bc6d0 // indirect
 	google.golang.org/protobuf v1.28.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
