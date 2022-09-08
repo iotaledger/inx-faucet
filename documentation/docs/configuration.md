@@ -35,10 +35,24 @@ inx-faucet -h --full
 ```
 ## <a id="app"></a> 1. Application
 
-| Name            | Description                                                                                            | Type    | Default value |
-| --------------- | ------------------------------------------------------------------------------------------------------ | ------- | ------------- |
-| checkForUpdates | Whether to check for updates of the application or not                                                 | boolean | true          |
-| stopGracePeriod | The maximum time to wait for background processes to finish during shutdown before terminating the app | string  | "5m"          |
+| Name                      | Description                                            | Type    | Default value |
+| ------------------------- | ------------------------------------------------------ | ------- | ------------- |
+| checkForUpdates           | Whether to check for updates of the application or not | boolean | true          |
+| [shutdown](#app_shutdown) | Configuration for shutdown                             | object  |               |
+
+### <a id="app_shutdown"></a> Shutdown
+
+| Name                     | Description                                                                                            | Type   | Default value |
+| ------------------------ | ------------------------------------------------------------------------------------------------------ | ------ | ------------- |
+| stopGracePeriod          | The maximum time to wait for background processes to finish during shutdown before terminating the app | string | "5m"          |
+| [log](#app_shutdown_log) | Configuration for log                                                                                  | object |               |
+
+### <a id="app_shutdown_log"></a> Log
+
+| Name     | Description                                         | Type    | Default value  |
+| -------- | --------------------------------------------------- | ------- | -------------- |
+| enabled  | Whether to store self-shutdown events to a log file | boolean | true           |
+| filePath | The file path to the self-shutdown log              | string  | "shutdown.log" |
 
 Example:
 
@@ -46,12 +60,48 @@ Example:
   {
     "app": {
       "checkForUpdates": true,
-      "stopGracePeriod": "5m"
+      "shutdown": {
+        "stopGracePeriod": "5m",
+        "log": {
+          "enabled": true,
+          "filePath": "shutdown.log"
+        }
+      }
     }
   }
 ```
 
-## <a id="inx"></a> 2. INX
+## <a id="logger"></a> 2. Logger
+
+| Name              | Description                                                                 | Type    | Default value |
+| ----------------- | --------------------------------------------------------------------------- | ------- | ------------- |
+| level             | The minimum enabled logging level                                           | string  | "info"        |
+| disableCaller     | Stops annotating logs with the calling function's file name and line number | boolean | true          |
+| disableStacktrace | Disables automatic stacktrace capturing                                     | boolean | false         |
+| stacktraceLevel   | The level stacktraces are captured and above                                | string  | "panic"       |
+| encoding          | The logger's encoding (options: "json", "console")                          | string  | "console"     |
+| outputPaths       | A list of URLs, file paths or stdout/stderr to write logging output to      | array   | stdout        |
+| disableEvents     | Prevents log messages from being raced as events                            | boolean | true          |
+
+Example:
+
+```json
+  {
+    "logger": {
+      "level": "info",
+      "disableCaller": true,
+      "disableStacktrace": false,
+      "stacktraceLevel": "panic",
+      "encoding": "console",
+      "outputPaths": [
+        "stdout"
+      ],
+      "disableEvents": true
+    }
+  }
+```
+
+## <a id="inx"></a> 3. INX
 
 | Name    | Description                            | Type   | Default value    |
 | ------- | -------------------------------------- | ------ | ---------------- |
@@ -67,7 +117,7 @@ Example:
   }
 ```
 
-## <a id="faucet"></a> 3. Faucet
+## <a id="faucet"></a> 4. Faucet
 
 | Name                           | Description                                                                                                                  | Type    | Default value    |
 | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- | ------- | ---------------- |
@@ -83,11 +133,12 @@ Example:
 
 ### <a id="faucet_ratelimit"></a> RateLimit
 
-| Name        | Description                                     | Type   | Default value |
-| ----------- | ----------------------------------------------- | ------ | ------------- |
-| period      | The period for rate limiting                    | string | "5m"          |
-| maxRequests | The maximum number of requests per period       | int    | 10            |
-| maxBurst    | Additional requests allowed in the burst period | int    | 20            |
+| Name        | Description                                     | Type    | Default value |
+| ----------- | ----------------------------------------------- | ------- | ------------- |
+| enabled     | Whether the rate limiting should be enabled     | boolean | true          |
+| period      | The period for rate limiting                    | string  | "5m"          |
+| maxRequests | The maximum number of requests per period       | int     | 10            |
+| maxBurst    | Additional requests allowed in the burst period | int     | 20            |
 
 Example:
 
@@ -102,6 +153,7 @@ Example:
       "batchTimeout": "2s",
       "bindAddress": "localhost:8091",
       "rateLimit": {
+        "enabled": true,
         "period": "5m",
         "maxRequests": 10,
         "maxBurst": 20
@@ -111,7 +163,7 @@ Example:
   }
 ```
 
-## <a id="profiling"></a> 4. Profiling
+## <a id="profiling"></a> 5. Profiling
 
 | Name        | Description                                       | Type    | Default value    |
 | ----------- | ------------------------------------------------- | ------- | ---------------- |
