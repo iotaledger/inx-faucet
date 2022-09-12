@@ -21,7 +21,8 @@
     "disableEvents": true
   },
   "inx": {
-    "address": "localhost:9029"
+    "address": "localhost:9029",
+    "maxConnectionAttempts": 30
   },
   "faucet": {
     "amount": 1000000000,
