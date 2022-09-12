@@ -3,10 +3,10 @@ module github.com/iotaledger/inx-faucet
 go 1.19
 
 require (
-	github.com/iotaledger/hive.go/core v1.0.0-beta.5
+	github.com/iotaledger/hive.go/core v1.0.0-beta.6
 	github.com/iotaledger/hive.go/serializer/v2 v2.0.0-beta.3
-	github.com/iotaledger/hornet/v2 v2.0.0-beta.7.0.20220909134036-46022173fce0
-	github.com/iotaledger/inx-app v1.0.0-beta.12
+	github.com/iotaledger/hornet/v2 v2.0.0-beta.8
+	github.com/iotaledger/inx-app v1.0.0-beta.13
 	github.com/iotaledger/inx/go v1.0.0-beta.8
 	github.com/iotaledger/iota.go/v3 v3.0.0-beta.9
 	github.com/labstack/echo/v4 v4.9.0
@@ -107,13 +107,13 @@ require (
 	go.uber.org/multierr v1.8.0 // indirect
 	go.uber.org/zap v1.23.0 // indirect
 	golang.org/x/crypto v0.0.0-20220829220503-c86fa9a7ed90 // indirect
-	golang.org/x/exp v0.0.0-20220909130031-43970299f5e2 // indirect
-	golang.org/x/net v0.0.0-20220907135653-1e95f45603a7 // indirect
+	golang.org/x/exp v0.0.0-20220909145303-c79614ebc70f // indirect
+	golang.org/x/net v0.0.0-20220909164309-bea034e7d591 // indirect
 	golang.org/x/sync v0.0.0-20220907140024-f12130a52804 // indirect
-	golang.org/x/sys v0.0.0-20220908164124-27713097b956 // indirect
+	golang.org/x/sys v0.0.0-20220909162455-aba9fc2a8ff2 // indirect
 	golang.org/x/text v0.3.7 // indirect
 	golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2 // indirect
-	google.golang.org/genproto v0.0.0-20220908141613-51c1cc9bc6d0 // indirect
+	google.golang.org/genproto v0.0.0-20220909194730-69f6226f97e5 // indirect
 	google.golang.org/protobuf v1.28.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
