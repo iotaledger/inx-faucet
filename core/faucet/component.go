@@ -28,6 +28,11 @@ import (
 	"github.com/iotaledger/iota.go/v3/nodeclient"
 )
 
+const (
+	inxRequestTimeout             = 5 * time.Second
+	indexerPluginAvailableTimeout = 30 * time.Second
+)
+
 func init() {
 	CoreComponent = &app.CoreComponent{
 		Component: &app.Component{
@@ -85,7 +90,7 @@ func provide(c *dig.Container) error {
 		NodeBridge *nodebridge.NodeBridge
 	}
 
-	if err := c.Provide(func(deps faucetDeps) *faucet.Faucet {
+	if err := c.Provide(func(deps faucetDeps) (*faucet.Faucet, error) {
 
 		fetchMetadata := func(blockID iotago.BlockID) (*faucet.Metadata, error) {
 			ctx, cancel := context.WithTimeout(CoreComponent.Daemon().ContextStopped(), 5*time.Second)
@@ -110,16 +115,19 @@ func provide(c *dig.Container) error {
 			}, nil
 		}
 
-		nodeClient := deps.NodeBridge.INXNodeClient()
+		ctxIndexer, cancelIndexer := context.WithTimeout(CoreComponent.Daemon().ContextStopped(), indexerPluginAvailableTimeout)
+		defer cancelIndexer()
+
+		indexer, err := deps.NodeBridge.Indexer(ctxIndexer)
+		if err != nil {
+			return nil, err
+		}
 
 		collectOutputs := func(address iotago.Address) ([]faucet.UTXOOutput, error) {
+			ctxRequest, cancelRequest := context.WithTimeout(CoreComponent.Daemon().ContextStopped(), inxRequestTimeout)
+			defer cancelRequest()
 
 			protoParas := deps.NodeBridge.ProtocolParameters()
-
-			indexer, err := nodeClient.Indexer(context.Background())
-			if err != nil {
-				return nil, err
-			}
 
 			falseCondition := false
 			query := &nodeclient.BasicOutputsQuery{
@@ -135,7 +143,7 @@ func provide(c *dig.Container) error {
 				},
 			}
 
-			result, err := indexer.Outputs(context.Background(), query)
+			result, err := indexer.Outputs(ctxRequest, query)
 			if err != nil {
 				return nil, err
 			}
@@ -194,7 +202,7 @@ func provide(c *dig.Container) error {
 			faucet.WithMaxOutputCount(ParamsFaucet.MaxOutputCount),
 			faucet.WithTagMessage(ParamsFaucet.TagMessage),
 			faucet.WithBatchTimeout(ParamsFaucet.BatchTimeout),
-		)
+		), nil
 	}); err != nil {
 		CoreComponent.LogPanic(err)
 	}
