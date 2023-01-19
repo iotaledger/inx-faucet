@@ -12,7 +12,7 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/time/rate"
 
-	"github.com/iotaledger/inx-app/httpserver"
+	"github.com/iotaledger/inx-app/pkg/httpserver"
 )
 
 const (

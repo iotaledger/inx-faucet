@@ -226,7 +226,7 @@ func NewFaucetTestEnv(t *testing.T,
 		if len(block.Parents) == 0 {
 			block.Parents = iotago.BlockIDs{te.LastMilestoneBlockID()}
 		}
-		_, err := te.PoWHandler.DoPoW(ctx, block, te.ProtocolParameters().MinPoWScore, 1, nil)
+		_, err := te.PoWHandler.DoPoW(ctx, block, serializer.DeSeriModePerformValidation, te.ProtocolParameters(), 1, nil)
 		if err != nil {
 			return iotago.BlockID{}, err
 		}
