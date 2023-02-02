@@ -189,7 +189,7 @@ func provide(c *dig.Container) error {
 			CoreComponent.Daemon(),
 			fetchMetadata,
 			collectOutputs,
-			deps.NodeBridge.IsNodeSynced,
+			deps.NodeBridge.IsNodeHealthy,
 			deps.NodeBridge.ProtocolParameters,
 			&faucetAddress,
 			faucetSigner,

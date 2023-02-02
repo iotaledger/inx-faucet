@@ -19,8 +19,8 @@ import (
 	"github.com/iotaledger/iota.go/v3/builder"
 )
 
-// IsNodeSyncedFunc is a function to query if the used node is synced.
-type IsNodeSyncedFunc = func() bool
+// IsNodeHealthyFunc is a function to query if the used node is synced.
+type IsNodeHealthyFunc = func() bool
 
 // ProtocolParamsFunc is a function to query the node for the latest protocol parameters.
 type ProtocolParamsFunc = func() *iotago.ProtocolParameters
@@ -76,6 +76,8 @@ type pendingTransaction struct {
 
 // InfoResponse defines the response of a GET RouteFaucetInfo REST API call.
 type InfoResponse struct {
+	// Whether the faucet is healthy.
+	IsHealthy bool `json:"isHealthy"`
 	// The bech32 address of the faucet.
 	Address string `json:"address"`
 	// The remaining balance of faucet.
@@ -107,8 +109,8 @@ type Faucet struct {
 	blockMetadataFunc BlockMetadataFunc
 	// used to collect unspent outputs for a given address.
 	collectOutputsFunc BasicOutputsForAddressFunc
-	// used to determine the sync status of the node.
-	nodeSyncedFunc IsNodeSyncedFunc
+	// used to determine the health status of the node.
+	nodeHealthyFunc IsNodeHealthyFunc
 	// Protocol parameters including byte costs
 	protocolParamsFunc ProtocolParamsFunc
 	// the address of the faucet.
@@ -248,7 +250,7 @@ func New(
 	daemon daemon.Daemon,
 	blockMetadataFunc BlockMetadataFunc,
 	collectOutputsFunc BasicOutputsForAddressFunc,
-	nodeSyncedFunc IsNodeSyncedFunc,
+	nodeHealthyFunc IsNodeHealthyFunc,
 	protocolParamsFunc ProtocolParamsFunc,
 	address iotago.Address,
 	addressSigner iotago.AddressSigner,
@@ -263,7 +265,7 @@ func New(
 		daemon:             daemon,
 		blockMetadataFunc:  blockMetadataFunc,
 		collectOutputsFunc: collectOutputsFunc,
-		nodeSyncedFunc:     nodeSyncedFunc,
+		nodeHealthyFunc:    nodeHealthyFunc,
 		protocolParamsFunc: protocolParamsFunc,
 		address:            address,
 		addressSigner:      addressSigner,
@@ -296,6 +298,7 @@ func (f *Faucet) Info() (*InfoResponse, error) {
 	protocolParams := f.protocolParamsFunc()
 
 	return &InfoResponse{
+		IsHealthy: f.nodeHealthyFunc(),
 		Address:   f.address.Bech32(protocolParams.Bech32HRP),
 		Balance:   f.faucetBalance,
 		TokenName: f.opts.tokenName,
@@ -332,9 +335,9 @@ func (f *Faucet) Enqueue(bech32Addr string) (*EnqueueResponse, error) {
 		return nil, err
 	}
 
-	if !f.nodeSyncedFunc() {
+	if !f.nodeHealthyFunc() {
 		//nolint:stylecheck,revive // this error message is shown to the user
-		return nil, errors.WithMessage(echo.ErrInternalServerError, "Faucet node is not synchronized. Please try again later!")
+		return nil, errors.WithMessage(echo.ErrInternalServerError, "Faucet node is not synchronized/healthy. Please try again later!")
 	}
 
 	f.Lock()
@@ -672,13 +675,13 @@ CollectValues:
 func (f *Faucet) processRequestsWithoutLocking(collectedRequestsCounter int, amount uint64, batchedRequests []*queueItem) []*queueItem {
 	processedBatchedRequests := []*queueItem{}
 	unprocessedBatchedRequests := []*queueItem{}
-	nodeSynced := f.nodeSyncedFunc()
+	nodeHealthy := f.nodeHealthyFunc()
 
 	for i := range batchedRequests {
 		request := batchedRequests[i]
 
-		if !nodeSynced {
-			// request can't be processed because the node is not synchronized => re-add it to the queue
+		if !nodeHealthy {
+			// request can't be processed because the node is not healthy => re-add it to the queue
 			unprocessedBatchedRequests = append(unprocessedBatchedRequests, request)
 
 			continue
