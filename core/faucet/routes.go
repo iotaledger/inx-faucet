@@ -16,6 +16,8 @@ import (
 )
 
 const (
+	// RouteFaucetHealth is the route to get the health info of the faucet.
+	RouteFaucetHealth = "/health"
 
 	// RouteFaucetInfo is the route to give info about the faucet address.
 	// GET returns address, balance, bech32Hrp and tokenName of the faucet.
@@ -41,6 +43,14 @@ func setupRoutes(e *echo.Echo) {
 	e.Pre(enforceMaxOneDotPerURL)
 
 	e.Group("/*").Use(frontendMiddleware())
+
+	e.GET(RouteFaucetHealth, func(c echo.Context) error {
+		if !deps.NodeBridge.NodeStatus().IsHealthy {
+			return c.NoContent(http.StatusServiceUnavailable)
+		}
+
+		return c.NoContent(http.StatusOK)
+	})
 
 	// Pass all the requests through to the local rest API
 	apiGroup := e.Group("/api")
