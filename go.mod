@@ -6,7 +6,7 @@ require (
 	github.com/iotaledger/hive.go/core v1.0.0-rc.2.0.20230131175029-3fe9778d3769
 	github.com/iotaledger/hive.go/serializer/v2 v2.0.0-rc.1
 	github.com/iotaledger/hornet/v2 v2.0.0-rc.4.0.20230119143652-01c2d0d5ae4e
-	github.com/iotaledger/inx-app v1.0.0-rc.2
+	github.com/iotaledger/inx-app v1.0.0-rc.3
 	github.com/iotaledger/inx/go v1.0.0-rc.1
 	github.com/iotaledger/iota.go/v3 v3.0.0-rc.1
 	github.com/labstack/echo/v4 v4.10.0
@@ -113,7 +113,7 @@ require (
 	golang.org/x/sys v0.4.0 // indirect
 	golang.org/x/text v0.6.0 // indirect
 	golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2 // indirect
-	google.golang.org/genproto v0.0.0-20230131230820-1c016267d619 // indirect
+	google.golang.org/genproto v0.0.0-20230202175211-008b39050e57 // indirect
 	google.golang.org/protobuf v1.28.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
