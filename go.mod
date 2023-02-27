@@ -11,7 +11,7 @@ require (
 	github.com/iotaledger/iota.go/v3 v3.0.0-rc.1
 	github.com/labstack/echo/v4 v4.10.0
 	github.com/pkg/errors v0.9.1
-	github.com/stretchr/testify v1.8.1
+	github.com/stretchr/testify v1.8.2
 	go.uber.org/dig v1.16.1
 	golang.org/x/time v0.3.0
 	google.golang.org/grpc v1.52.3
