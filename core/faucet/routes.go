@@ -30,7 +30,7 @@ const (
 
 func enforceMaxOneDotPerURL(next echo.HandlerFunc) echo.HandlerFunc {
 	return func(c echo.Context) error {
-		if strings.Count(c.Request().URL.Path, "..") != 0 {
+		if strings.Count(c.Request().RequestURI, "..") != 0 {
 			return c.String(http.StatusForbidden, "path not allowed")
 		}
 
@@ -92,12 +92,6 @@ func setupRoutes(e *echo.Echo) {
 				id := ctx.RealIP()
 
 				return id, nil
-			},
-			ErrorHandler: func(context echo.Context, err error) error {
-				return context.JSON(http.StatusForbidden, nil)
-			},
-			DenyHandler: func(context echo.Context, identifier string, err error) error {
-				return context.JSON(http.StatusTooManyRequests, nil)
 			},
 		}
 		apiGroup.Use(middleware.RateLimiterWithConfig(rateLimiterConfig))
