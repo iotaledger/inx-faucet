@@ -9,10 +9,10 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/pkg/errors"
 
-	"github.com/iotaledger/hive.go/core/daemon"
-	"github.com/iotaledger/hive.go/core/events"
-	"github.com/iotaledger/hive.go/core/logger"
-	"github.com/iotaledger/hive.go/core/syncutils"
+	"github.com/iotaledger/hive.go/app/daemon"
+	"github.com/iotaledger/hive.go/logger"
+	"github.com/iotaledger/hive.go/runtime/event"
+	"github.com/iotaledger/hive.go/runtime/syncutils"
 	"github.com/iotaledger/hornet/v2/pkg/common"
 	"github.com/iotaledger/inx-app/pkg/httpserver"
 	iotago "github.com/iotaledger/iota.go/v3"
@@ -54,9 +54,9 @@ var (
 // Events are the events issued by the faucet.
 type Events struct {
 	// Fired when a faucet block is issued.
-	IssuedBlock *events.Event
+	IssuedBlock *event.Event1[iotago.BlockID]
 	// SoftError is triggered when a soft error is encountered.
-	SoftError *events.Event
+	SoftError *event.Event1[error]
 }
 
 // queueItem is an item for the faucet requests queue.
@@ -240,11 +240,6 @@ func WithBatchTimeout(timeout time.Duration) Option {
 // Option is a function setting a faucet option.
 type Option func(opts *Options)
 
-func BlockIDCaller(handler interface{}, params ...interface{}) {
-	//nolint:forcetypeassert // we will replace that with generic events anyway
-	handler.(func(blockID iotago.BlockID))(params[0].(iotago.BlockID))
-}
-
 // New creates a new faucet instance.
 func New(
 	daemon daemon.Daemon,
@@ -273,8 +268,8 @@ func New(
 		opts:               options,
 
 		Events: &Events{
-			IssuedBlock: events.NewEvent(BlockIDCaller),
-			SoftError:   events.NewEvent(events.ErrorCaller),
+			IssuedBlock: event.New1[iotago.BlockID](),
+			SoftError:   event.New1[error](),
 		},
 	}
 	faucet.WrappedLogger = logger.NewWrappedLogger(options.logger)
