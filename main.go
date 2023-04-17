@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/iotaledger/inx-faucet/core/app"
+	"github.com/iotaledger/inx-faucet/components/app"
 )
 
 func main() {
