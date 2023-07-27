@@ -7,26 +7,28 @@ import (
 	"time"
 
 	"github.com/labstack/echo/v4"
-	"github.com/pkg/errors"
 
 	"github.com/iotaledger/hive.go/app/daemon"
+	"github.com/iotaledger/hive.go/ierrors"
 	"github.com/iotaledger/hive.go/logger"
 	"github.com/iotaledger/hive.go/runtime/event"
 	"github.com/iotaledger/hive.go/runtime/syncutils"
-	"github.com/iotaledger/hornet/v2/pkg/common"
 	"github.com/iotaledger/inx-app/pkg/httpserver"
-	iotago "github.com/iotaledger/iota.go/v3"
-	"github.com/iotaledger/iota.go/v3/builder"
+	iotago "github.com/iotaledger/iota.go/v4"
+	"github.com/iotaledger/iota.go/v4/api"
+	"github.com/iotaledger/iota.go/v4/builder"
+)
+
+var (
+	// ErrOperationAborted is returned when the operation was aborted e.g. by a shutdown signal.
+	ErrOperationAborted = ierrors.New("operation was aborted")
 )
 
 // IsNodeHealthyFunc is a function to query if the used node is synced.
 type IsNodeHealthyFunc = func() bool
 
-// ProtocolParamsFunc is a function to query the node for the latest protocol parameters.
-type ProtocolParamsFunc = func() *iotago.ProtocolParameters
-
 // SendBlockFunc is a function which sends a block to the network.
-type SendBlockFunc = func(ctx context.Context, block *iotago.Block) (iotago.BlockID, error)
+type SendBlockFunc = func(ctx context.Context, block *iotago.ProtocolBlock) (iotago.BlockID, error)
 
 // Metadata contains the basic block metadata required by the faucet.
 type Metadata struct {
@@ -48,7 +50,7 @@ type BasicOutputsForAddressFunc = func(address iotago.Address) ([]UTXOOutput, er
 
 var (
 	// ErrNothingToProcess is returned when there is no need to sweep or send funds.
-	ErrNothingToProcess = errors.New("nothing to process")
+	ErrNothingToProcess = ierrors.New("nothing to process")
 )
 
 // Events are the events issued by the faucet.
@@ -62,7 +64,7 @@ type Events struct {
 // queueItem is an item for the faucet requests queue.
 type queueItem struct {
 	Bech32  string
-	Amount  uint64
+	Amount  iotago.BaseToken
 	Address iotago.Address
 }
 
@@ -81,7 +83,7 @@ type InfoResponse struct {
 	// The bech32 address of the faucet.
 	Address string `json:"address"`
 	// The remaining balance of faucet.
-	Balance uint64 `json:"balance"`
+	Balance iotago.BaseToken `json:"balance"`
 	// The name of the token of the faucet.
 	TokenName string `json:"tokenName"`
 	// The Bech32 human readable part of the the faucet.
@@ -111,8 +113,8 @@ type Faucet struct {
 	collectOutputsFunc BasicOutputsForAddressFunc
 	// used to determine the health status of the node.
 	nodeHealthyFunc IsNodeHealthyFunc
-	// Protocol parameters including byte costs
-	protocolParamsFunc ProtocolParamsFunc
+	// the api Provider
+	apiProvider api.Provider
 	// the address of the faucet.
 	address iotago.Address
 	// used to sign the faucet transactions.
@@ -126,7 +128,7 @@ type Faucet struct {
 	Events *Events
 
 	// faucetBalance is the remaining balance of the faucet if all requests would be processed.
-	faucetBalance uint64
+	faucetBalance iotago.BaseToken
 	// queue of new requests.
 	queue chan *queueItem
 	// map with all queued requests per address (bech32).
@@ -158,9 +160,9 @@ type Options struct {
 	// the logger used to log events.
 	logger            *logger.Logger
 	tokenName         string
-	amount            uint64
-	smallAmount       uint64
-	maxAddressBalance uint64
+	amount            iotago.BaseToken
+	smallAmount       iotago.BaseToken
+	maxAddressBalance iotago.BaseToken
 	maxOutputCount    int
 	tagMessage        []byte
 	batchTimeout      time.Duration
@@ -188,7 +190,7 @@ func WithTokenName(name string) Option {
 }
 
 // WithAmount defines the amount of funds the requester receives.
-func WithAmount(amount uint64) Option {
+func WithAmount(amount iotago.BaseToken) Option {
 	return func(opts *Options) {
 		opts.amount = amount
 	}
@@ -196,7 +198,7 @@ func WithAmount(amount uint64) Option {
 
 // WithSmallAmount defines the amount of funds the requester receives
 // if the target address has more funds than the faucet amount and less than maximum.
-func WithSmallAmount(smallAmount uint64) Option {
+func WithSmallAmount(smallAmount iotago.BaseToken) Option {
 	return func(opts *Options) {
 		opts.smallAmount = smallAmount
 	}
@@ -204,7 +206,7 @@ func WithSmallAmount(smallAmount uint64) Option {
 
 // WithMaxAddressBalance defines the maximum allowed amount of funds on the target address.
 // If there are more funds already, the faucet request is rejected.
-func WithMaxAddressBalance(maxAddressBalance uint64) Option {
+func WithMaxAddressBalance(maxAddressBalance iotago.BaseToken) Option {
 	return func(opts *Options) {
 		opts.maxAddressBalance = maxAddressBalance
 	}
@@ -246,7 +248,7 @@ func New(
 	blockMetadataFunc BlockMetadataFunc,
 	collectOutputsFunc BasicOutputsForAddressFunc,
 	nodeHealthyFunc IsNodeHealthyFunc,
-	protocolParamsFunc ProtocolParamsFunc,
+	apiProvider api.Provider,
 	address iotago.Address,
 	addressSigner iotago.AddressSigner,
 	sendBlockFunc SendBlockFunc,
@@ -261,7 +263,7 @@ func New(
 		blockMetadataFunc:  blockMetadataFunc,
 		collectOutputsFunc: collectOutputsFunc,
 		nodeHealthyFunc:    nodeHealthyFunc,
-		protocolParamsFunc: protocolParamsFunc,
+		apiProvider:        apiProvider,
 		address:            address,
 		addressSigner:      addressSigner,
 		sendBlockFunc:      sendBlockFunc,
@@ -290,33 +292,33 @@ func (f *Faucet) init() {
 
 // Info returns the used faucet address and remaining balance.
 func (f *Faucet) Info() (*InfoResponse, error) {
-	protocolParams := f.protocolParamsFunc()
+	protocolParams := f.apiProvider.CurrentAPI().ProtocolParameters()
 
 	return &InfoResponse{
 		IsHealthy: f.nodeHealthyFunc(),
-		Address:   f.address.Bech32(protocolParams.Bech32HRP),
+		Address:   f.address.Bech32(protocolParams.Bech32HRP()),
 		Balance:   f.faucetBalance,
 		TokenName: f.opts.tokenName,
-		Bech32HRP: protocolParams.Bech32HRP,
+		Bech32HRP: protocolParams.Bech32HRP(),
 	}, nil
 }
 
-func (f *Faucet) collectUnspentBasicOutputsWithoutConstraints(address iotago.Address) ([]UTXOOutput, uint64, error) {
+func (f *Faucet) collectUnspentBasicOutputsWithoutConstraints(address iotago.Address) ([]UTXOOutput, iotago.BaseToken, error) {
 
 	outputs, err := f.collectOutputsFunc(address)
 	if err != nil {
 		return nil, 0, err
 	}
 
-	var balance uint64
+	var balance iotago.BaseToken
 	for _, output := range outputs {
-		balance += output.Output.Deposit()
+		balance += output.Output.Amount
 	}
 
 	return outputs, balance, nil
 }
 
-func (f *Faucet) computeAddressBalance(address iotago.Address) (uint64, error) {
+func (f *Faucet) computeAddressBalance(address iotago.Address) (iotago.BaseToken, error) {
 	_, balance, err := f.collectUnspentBasicOutputsWithoutConstraints(address)
 
 	return balance, err
@@ -332,7 +334,7 @@ func (f *Faucet) Enqueue(bech32Addr string) (*EnqueueResponse, error) {
 
 	if !f.nodeHealthyFunc() {
 		//nolint:stylecheck,revive // this error message is shown to the user
-		return nil, errors.WithMessage(echo.ErrInternalServerError, "Faucet node is not synchronized/healthy. Please try again later!")
+		return nil, ierrors.Wrap(echo.ErrInternalServerError, "Faucet node is not synchronized/healthy. Please try again later!")
 	}
 
 	f.Lock()
@@ -340,7 +342,7 @@ func (f *Faucet) Enqueue(bech32Addr string) (*EnqueueResponse, error) {
 
 	if _, exists := f.queueMap[bech32Addr]; exists {
 		//nolint:stylecheck,revive // this error message is shown to the user
-		return nil, errors.WithMessage(httpserver.ErrInvalidParameter, "Address is already in the queue.")
+		return nil, ierrors.Wrap(httpserver.ErrInvalidParameter, "Address is already in the queue.")
 	}
 
 	amount := f.opts.amount
@@ -350,13 +352,13 @@ func (f *Faucet) Enqueue(bech32Addr string) (*EnqueueResponse, error) {
 
 		if balance >= f.opts.maxAddressBalance {
 			//nolint:stylecheck,revive // this error message is shown to the user
-			return nil, errors.WithMessage(httpserver.ErrInvalidParameter, "You already have enough funds on your address.")
+			return nil, ierrors.Wrap(httpserver.ErrInvalidParameter, "You already have enough funds on your address.")
 		}
 	}
 
 	if amount > f.faucetBalance {
 		//nolint:stylecheck,revive // this error message is shown to the user
-		return nil, errors.WithMessage(echo.ErrInternalServerError, "Faucet does not have enough funds to process your request. Please try again later!")
+		return nil, ierrors.Wrap(echo.ErrInternalServerError, "Faucet does not have enough funds to process your request. Please try again later!")
 	}
 
 	request := &queueItem{
@@ -378,7 +380,7 @@ func (f *Faucet) Enqueue(bech32Addr string) (*EnqueueResponse, error) {
 	default:
 		// queue is full
 		//nolint:stylecheck,revive // this error message is shown to the user
-		return nil, errors.WithMessage(echo.ErrInternalServerError, "Faucet queue is full. Please try again later!")
+		return nil, ierrors.Wrap(echo.ErrInternalServerError, "Faucet queue is full. Please try again later!")
 	}
 }
 
@@ -393,13 +395,13 @@ func (f *Faucet) parseBech32Address(bech32Addr string) (iotago.Address, error) {
 	hrp, bech32Address, err := iotago.ParseBech32(bech32Addr)
 	if err != nil {
 		//nolint:stylecheck,revive // this error message is shown to the user
-		return nil, errors.WithMessage(httpserver.ErrInvalidParameter, "Invalid bech32 address provided!")
+		return nil, ierrors.Wrap(httpserver.ErrInvalidParameter, "Invalid bech32 address provided!")
 	}
 
-	protocolParams := f.protocolParamsFunc()
-	if hrp != protocolParams.Bech32HRP {
+	protocolParams := f.apiProvider.CurrentAPI().ProtocolParameters()
+	if hrp != protocolParams.Bech32HRP() {
 		//nolint:stylecheck,revive // this error message is shown to the user
-		return nil, errors.WithMessagef(httpserver.ErrInvalidParameter, "Invalid bech32 address provided! Address does not start with \"%s\".", protocolParams.Bech32HRP)
+		return nil, ierrors.Wrapf(httpserver.ErrInvalidParameter, "Invalid bech32 address provided! Address does not start with \"%s\".", protocolParams.Bech32HRP())
 	}
 
 	return bech32Address, nil
@@ -447,7 +449,7 @@ func (f *Faucet) clearPendingTransactionWithoutLocking(blockID iotago.BlockID) {
 }
 
 // createBlock creates a new block and references the last faucet block.
-func (f *Faucet) createBlock(txPayload iotago.Payload, tip ...iotago.BlockID) (*iotago.Block, error) {
+func (f *Faucet) createBlock(api iotago.API, txPayload iotago.Payload, tip ...iotago.BlockID) (*iotago.ProtocolBlock, error) {
 
 	tips := iotago.BlockIDs{}
 	if len(tip) > 0 {
@@ -455,17 +457,21 @@ func (f *Faucet) createBlock(txPayload iotago.Payload, tip ...iotago.BlockID) (*
 		tips = append(tips, tip[0])
 	}
 
-	return builder.NewBlockBuilder().
-		ProtocolVersion(f.protocolParamsFunc().Version).
-		Parents(tips).
+	// TODO: do tipselection here and sign the full block
+	// we need to add an account in the snapshot generator and the issuer pubkey in the settings
+
+	return builder.NewBasicBlockBuilder(api).
+		StrongParents(tips).
 		Payload(txPayload).
 		Build()
 }
 
 // buildTransactionPayload creates a signed transaction payload with all UTXO and batched requests.
-func (f *Faucet) buildTransactionPayload(unspentOutputs []UTXOOutput, batchedRequests []*queueItem) (*iotago.Transaction, iotago.TransactionID, iotago.OutputIDs, *iotago.UTXOInput, uint64, error) {
+func (f *Faucet) buildTransactionPayload(api iotago.API, unspentOutputs []UTXOOutput, batchedRequests []*queueItem) (*iotago.Transaction, iotago.TransactionID, iotago.OutputIDs, *iotago.UTXOInput, iotago.BaseToken, error) {
 
-	txBuilder := builder.NewTransactionBuilder(f.protocolParamsFunc().NetworkID())
+	api.ProtocolParameters()
+
+	txBuilder := builder.NewTransactionBuilder(api)
 	txBuilder.AddTaggedDataPayload(&iotago.TaggedData{Tag: f.opts.tagMessage, Data: nil})
 
 	outputCount := 0
@@ -475,7 +481,7 @@ func (f *Faucet) buildTransactionPayload(unspentOutputs []UTXOOutput, batchedReq
 	consumedInputs := []iotago.OutputID{}
 	for _, unspentOutput := range unspentOutputs {
 		outputCount++
-		remainderAmount += int64(unspentOutput.Output.Deposit())
+		remainderAmount += int64(unspentOutput.Output.Amount)
 		txBuilder.AddInput(&builder.TxInput{UnlockTarget: f.address, InputID: unspentOutput.OutputID, Input: unspentOutput.Output})
 		consumedInputs = append(consumedInputs, unspentOutput.OutputID)
 	}
@@ -498,13 +504,13 @@ func (f *Faucet) buildTransactionPayload(unspentOutputs []UTXOOutput, batchedReq
 		amount := req.Amount
 		if remainderAmount < int64(amount) {
 			// not enough funds left
-			amount = uint64(remainderAmount)
+			amount = iotago.BaseToken(remainderAmount)
 		}
 		remainderAmount -= int64(amount)
 
 		txBuilder.AddOutput(&iotago.BasicOutput{
 			Amount: amount,
-			Conditions: iotago.UnlockConditions{
+			Conditions: iotago.BasicOutputUnlockConditions{
 				&iotago.AddressUnlockCondition{Address: req.Address},
 			},
 		})
@@ -512,19 +518,19 @@ func (f *Faucet) buildTransactionPayload(unspentOutputs []UTXOOutput, batchedReq
 
 	if remainderAmount > 0 {
 		txBuilder.AddOutput(&iotago.BasicOutput{
-			Amount: uint64(remainderAmount),
-			Conditions: iotago.UnlockConditions{
+			Amount: iotago.BaseToken(remainderAmount),
+			Conditions: iotago.BasicOutputUnlockConditions{
 				&iotago.AddressUnlockCondition{Address: f.address},
 			},
 		})
 	}
 
-	txPayload, err := txBuilder.Build(f.protocolParamsFunc(), f.addressSigner)
+	txPayload, err := txBuilder.Build(f.addressSigner)
 	if err != nil {
 		return nil, iotago.TransactionID{}, nil, nil, 0, err
 	}
 
-	transactionID, err := txPayload.ID()
+	transactionID, err := txPayload.ID(api)
 	if err != nil {
 		return nil, iotago.TransactionID{}, nil, nil, 0, fmt.Errorf("can't compute the transaction ID, error: %w", err)
 	}
@@ -559,21 +565,22 @@ func (f *Faucet) buildTransactionPayload(unspentOutputs []UTXOOutput, batchedReq
 	}
 
 	if !found {
-		return nil, iotago.TransactionID{}, nil, nil, 0, errors.New("can't find the faucet remainder output")
+		return nil, iotago.TransactionID{}, nil, nil, 0, ierrors.New("can't find the faucet remainder output")
 	}
 
-	return txPayload, transactionID, consumedInputs, remainderOutput, uint64(remainderAmount), nil
+	return txPayload, transactionID, consumedInputs, remainderOutput, iotago.BaseToken(remainderAmount), nil
 }
 
 // sendFaucetBlock creates a faucet transaction payload and remembers the last sent blockID and the lastRemainderOutput.
 func (f *Faucet) sendFaucetBlock(ctx context.Context, unspentOutputs []UTXOOutput, batchedRequests []*queueItem, tip ...iotago.BlockID) error {
+	api := f.apiProvider.CurrentAPI()
 
-	txPayload, transactionID, consumedInputs, remainderIotaGoOutput, remainderAmount, err := f.buildTransactionPayload(unspentOutputs, batchedRequests)
+	txPayload, transactionID, consumedInputs, remainderIotaGoOutput, remainderAmount, err := f.buildTransactionPayload(api, unspentOutputs, batchedRequests)
 	if err != nil {
 		return fmt.Errorf("build transaction payload failed, error: %w", err)
 	}
 
-	block, err := f.createBlock(txPayload, tip...)
+	block, err := f.createBlock(api, txPayload, tip...)
 	if err != nil {
 		return fmt.Errorf("build faucet block failed, error: %w", err)
 	}
@@ -593,10 +600,10 @@ func (f *Faucet) sendFaucetBlock(ctx context.Context, unspentOutputs []UTXOOutpu
 	})
 
 	if remainderIotaGoOutput != nil {
-		remainderIotaGoOutputID := remainderIotaGoOutput.ID()
+		remainderIotaGoOutputID := remainderIotaGoOutput.OutputID()
 		output := &iotago.BasicOutput{
 			Amount: remainderAmount,
-			Conditions: iotago.UnlockConditions{
+			Conditions: iotago.BasicOutputUnlockConditions{
 				&iotago.AddressUnlockCondition{Address: f.address},
 			},
 		}
@@ -633,7 +640,7 @@ CollectValues:
 		select {
 		case <-ctx.Done():
 			// faucet was stopped
-			return nil, common.ErrOperationAborted
+			return nil, ErrOperationAborted
 
 		case <-time.After(f.opts.batchTimeout):
 			// timeout was reached => stop collecting requests
@@ -667,7 +674,7 @@ CollectValues:
 
 // processRequestsWithoutLocking processes all possible requests considering the maximum transaction size and the remaining funds of the faucet.
 // write lock must be acquired outside.
-func (f *Faucet) processRequestsWithoutLocking(collectedRequestsCounter int, amount uint64, batchedRequests []*queueItem) []*queueItem {
+func (f *Faucet) processRequestsWithoutLocking(collectedRequestsCounter int, amount iotago.BaseToken, batchedRequests []*queueItem) []*queueItem {
 	processedBatchedRequests := []*queueItem{}
 	unprocessedBatchedRequests := []*queueItem{}
 	nodeHealthy := f.nodeHealthyFunc()
@@ -713,7 +720,9 @@ func (f *Faucet) RunFaucetLoop(ctx context.Context, initDoneCallback func()) err
 	// set initial faucet balance
 	faucetBalance, err := f.computeAddressBalance(f.address)
 	if err != nil {
-		return common.CriticalError(fmt.Errorf("reading faucet address balance failed: %s, error: %w", f.address.Bech32(f.protocolParamsFunc().Bech32HRP), err))
+		protocolParams := f.apiProvider.CurrentAPI().ProtocolParameters()
+
+		return CriticalError(fmt.Errorf("reading faucet address balance failed: %s, error: %w", f.address.Bech32(protocolParams.Bech32HRP()), err))
 	}
 	f.faucetBalance = faucetBalance
 
@@ -731,10 +740,10 @@ func (f *Faucet) RunFaucetLoop(ctx context.Context, initDoneCallback func()) err
 			// first collect requests
 			batchedRequests, err := f.collectRequests(ctx)
 			if err != nil {
-				if errors.Is(err, common.ErrOperationAborted) {
+				if ierrors.Is(err, ErrOperationAborted) {
 					return nil
 				}
-				if common.IsCriticalError(err) != nil {
+				if IsCriticalError(err) != nil {
 					// error is a critical error
 					// => stop the faucet
 					return err
@@ -744,13 +753,13 @@ func (f *Faucet) RunFaucetLoop(ctx context.Context, initDoneCallback func()) err
 				continue
 			}
 
-			collectUnspentOutputsWithoutLocking := func() ([]UTXOOutput, uint64, error) {
+			collectUnspentOutputsWithoutLocking := func() ([]UTXOOutput, iotago.BaseToken, error) {
 				if f.lastRemainderOutput != nil {
 					// the lastRemainderOutput is reused as input in the next transaction, even if it was not yet referenced by a milestone.
 					// this is done to increase the throughput of the faucet in high load situations.
 					// we can't collect unspent outputs, as long as the lastRemainderOutput was not confirmed,
 					// since it's creating transaction could also have consumed the same UTXOs.
-					return []UTXOOutput{*f.lastRemainderOutput}, f.lastRemainderOutput.Output.Deposit(), nil
+					return []UTXOOutput{*f.lastRemainderOutput}, f.lastRemainderOutput.Output.Amount, nil
 				}
 
 				return f.collectUnspentBasicOutputsWithoutConstraints(f.address)
@@ -785,8 +794,8 @@ func (f *Faucet) RunFaucetLoop(ctx context.Context, initDoneCallback func()) err
 
 			unspentOutputs, processableRequests, tips, err := processRequests()
 			if err != nil {
-				if !errors.Is(err, ErrNothingToProcess) {
-					if common.IsCriticalError(err) != nil {
+				if !ierrors.Is(err, ErrNothingToProcess) {
+					if IsCriticalError(err) != nil {
 						// error is a critical error
 						// => stop the faucet
 						return err
@@ -798,7 +807,7 @@ func (f *Faucet) RunFaucetLoop(ctx context.Context, initDoneCallback func()) err
 			}
 
 			if err := f.sendFaucetBlock(ctx, unspentOutputs, processableRequests, tips...); err != nil {
-				if common.IsCriticalError(err) != nil {
+				if IsCriticalError(err) != nil {
 					// error is a critical error
 					// => stop the faucet
 					return err
@@ -864,7 +873,7 @@ func (f *Faucet) ApplyNewLedgerUpdate(createdOutputs iotago.OutputIDs, consumedO
 				TransactionOutputIndex: 0,
 			}
 
-			if _, created := newOutputsMap[txOutputIndexZero.ID()]; !created {
+			if _, created := newOutputsMap[txOutputIndexZero.OutputID()]; !created {
 				// transaction was conflicting => readd the items to the queue and delete the pending transaction
 				conflicting = true
 				f.readdRequestsWithoutLocking(pendingTx.QueuedItems)
@@ -962,7 +971,7 @@ func (f *Faucet) ApplyNewLedgerUpdate(createdOutputs iotago.OutputIDs, consumedO
 	}
 
 	// calculate total balance of all pending requests
-	var pendingRequestsBalance uint64
+	var pendingRequestsBalance iotago.BaseToken
 	for _, pendingRequest := range f.queueMap {
 		pendingRequestsBalance += pendingRequest.Amount
 	}
@@ -971,7 +980,9 @@ func (f *Faucet) ApplyNewLedgerUpdate(createdOutputs iotago.OutputIDs, consumedO
 	// no need to lock since we are in the milestone confirmation anyway
 	faucetBalance, err := f.computeAddressBalance(f.address)
 	if err != nil {
-		return common.CriticalError(fmt.Errorf("reading faucet address balance failed: %s, error: %w", f.address.Bech32(f.protocolParamsFunc().Bech32HRP), err))
+		protocolParams := f.apiProvider.CurrentAPI().ProtocolParameters()
+
+		return CriticalError(fmt.Errorf("reading faucet address balance failed: %s, error: %w", f.address.Bech32(protocolParams.Bech32HRP()), err))
 	}
 
 	if faucetBalance < pendingRequestsBalance {

@@ -10,7 +10,7 @@ import (
 	"io/ioutil"
 	"net/http"
 
-	iotago "github.com/iotaledger/iota.go/v3"
+	iotago "github.com/iotaledger/iota.go/v4"
 )
 
 const (

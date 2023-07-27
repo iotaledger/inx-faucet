@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/labstack/echo/v4/middleware"
-	"github.com/pkg/errors"
 	"go.uber.org/dig"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -18,14 +17,14 @@ import (
 	"github.com/iotaledger/hive.go/app"
 	"github.com/iotaledger/hive.go/app/shutdown"
 	"github.com/iotaledger/hive.go/crypto"
-	"github.com/iotaledger/hornet/v2/pkg/common"
+	"github.com/iotaledger/hive.go/ierrors"
 	"github.com/iotaledger/inx-app/pkg/httpserver"
 	"github.com/iotaledger/inx-app/pkg/nodebridge"
 	"github.com/iotaledger/inx-faucet/pkg/daemon"
 	"github.com/iotaledger/inx-faucet/pkg/faucet"
 	inx "github.com/iotaledger/inx/go"
-	iotago "github.com/iotaledger/iota.go/v3"
-	"github.com/iotaledger/iota.go/v3/nodeclient"
+	iotago "github.com/iotaledger/iota.go/v4"
+	"github.com/iotaledger/iota.go/v4/nodeclient/apimodels"
 )
 
 const (
@@ -81,7 +80,7 @@ func provide(c *dig.Container) error {
 	}
 
 	faucetAddress := iotago.Ed25519AddressFromPubKey(publicKey)
-	faucetSigner := iotago.NewInMemoryAddressSigner(iotago.NewAddressKeysForEd25519Address(&faucetAddress, privateKey))
+	faucetSigner := iotago.NewInMemoryAddressSigner(iotago.NewAddressKeysForEd25519Address(faucetAddress, privateKey))
 
 	type faucetDeps struct {
 		dig.In
@@ -106,10 +105,11 @@ func provide(c *dig.Container) error {
 			}
 
 			return &faucet.Metadata{
-				IsReferenced: metadata.GetReferencedByMilestoneIndex() != 0,
+				// TODO: this needs to be adapted to the new states
+				IsReferenced: metadata.GetBlockState() == inx.BlockMetadata_BLOCK_STATE_CONFIRMED,
 				//nolint:nosnakecase // grpc uses underscores
-				IsConflicting:  metadata.GetConflictReason() != inx.BlockMetadata_CONFLICT_REASON_NONE,
-				ShouldReattach: metadata.GetShouldReattach(),
+				IsConflicting: metadata.GetTxFailureReason() != inx.BlockMetadata_TRANSACTION_FAILURE_REASON_NONE,
+				//ShouldReattach: metadata.GetShouldReattach(),
 			}, nil
 		}
 
@@ -125,18 +125,18 @@ func provide(c *dig.Container) error {
 			ctxRequest, cancelRequest := context.WithTimeout(Component.Daemon().ContextStopped(), inxRequestTimeout)
 			defer cancelRequest()
 
-			protoParas := deps.NodeBridge.ProtocolParameters()
+			protocolParams := deps.NodeBridge.APIProvider().CurrentAPI().ProtocolParameters()
 
 			falseCondition := false
-			query := &nodeclient.BasicOutputsQuery{
-				AddressBech32: address.Bech32(protoParas.Bech32HRP),
-				IndexerExpirationParas: nodeclient.IndexerExpirationParas{
+			query := &apimodels.BasicOutputsQuery{
+				AddressBech32: address.Bech32(protocolParams.Bech32HRP()),
+				IndexerExpirationParams: apimodels.IndexerExpirationParams{
 					HasExpiration: &falseCondition,
 				},
-				IndexerTimelockParas: nodeclient.IndexerTimelockParas{
+				IndexerTimelockParams: apimodels.IndexerTimelockParams{
 					HasTimelock: &falseCondition,
 				},
-				IndexerStorageDepositParas: nodeclient.IndexerStorageDepositParas{
+				IndexerStorageDepositParams: apimodels.IndexerStorageDepositParams{
 					HasStorageDepositReturn: &falseCondition,
 				},
 			}
@@ -148,7 +148,7 @@ func provide(c *dig.Container) error {
 
 			faucetOutputs := []faucet.UTXOOutput{}
 			for result.Next() {
-				outputs, err := result.Outputs()
+				outputs, err := result.Outputs(ctxRequest)
 				if err != nil {
 					return nil, err
 				}
@@ -175,9 +175,10 @@ func provide(c *dig.Container) error {
 			return faucetOutputs, nil
 		}
 
-		submitBlock := func(ctx context.Context, block *iotago.Block) (iotago.BlockID, error) {
-			if !deps.NodeBridge.IsNodeAlmostSynced() {
-				return iotago.BlockID{}, errors.New("node is not synced")
+		submitBlock := func(ctx context.Context, block *iotago.ProtocolBlock) (iotago.BlockID, error) {
+			// TODO: do we need synced?
+			if !deps.NodeBridge.IsNodeHealthy() {
+				return iotago.BlockID{}, ierrors.New("node is not synced")
 			}
 
 			return deps.NodeBridge.SubmitBlock(ctx, block)
@@ -188,15 +189,15 @@ func provide(c *dig.Container) error {
 			fetchMetadata,
 			collectOutputs,
 			deps.NodeBridge.IsNodeHealthy,
-			deps.NodeBridge.ProtocolParameters,
-			&faucetAddress,
+			deps.NodeBridge.APIProvider(),
+			faucetAddress,
 			faucetSigner,
 			submitBlock,
 			faucet.WithLogger(Component.Logger()),
 			faucet.WithTokenName(deps.NodeBridge.NodeConfig.BaseToken.Name),
-			faucet.WithAmount(ParamsFaucet.Amount),
-			faucet.WithSmallAmount(ParamsFaucet.SmallAmount),
-			faucet.WithMaxAddressBalance(ParamsFaucet.MaxAddressBalance),
+			faucet.WithAmount(iotago.BaseToken(ParamsFaucet.Amount)),
+			faucet.WithSmallAmount(iotago.BaseToken(ParamsFaucet.SmallAmount)),
+			faucet.WithMaxAddressBalance(iotago.BaseToken(ParamsFaucet.MaxAddressBalance)),
 			faucet.WithMaxOutputCount(ParamsFaucet.MaxOutputCount),
 			faucet.WithTagMessage(ParamsFaucet.TagMessage),
 			faucet.WithBatchTimeout(ParamsFaucet.BatchTimeout),
@@ -237,7 +238,7 @@ func run() error {
 
 	// create a background worker that handles the enqueued faucet requests
 	if err := Component.Daemon().BackgroundWorker("Faucet", func(ctx context.Context) {
-		if err := deps.Faucet.RunFaucetLoop(ctx, nil); err != nil && common.IsCriticalError(err) != nil {
+		if err := deps.Faucet.RunFaucetLoop(ctx, nil); err != nil && faucet.IsCriticalError(err) != nil {
 			deps.ShutdownHandler.SelfShutdown(fmt.Sprintf("faucet plugin hit a critical error: %s", err.Error()), true)
 		}
 	}, daemon.PriorityStopFaucet); err != nil {
@@ -255,7 +256,7 @@ func run() error {
 	go func() {
 		Component.LogInfof("You can now access the faucet website using: http://%s", ParamsFaucet.BindAddress)
 
-		if err := e.Start(ParamsFaucet.BindAddress); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		if err := e.Start(ParamsFaucet.BindAddress); err != nil && !ierrors.Is(err, http.ErrServerClosed) {
 			Component.LogWarnf("Stopped faucet website server due to an error (%s)", err)
 		}
 	}()

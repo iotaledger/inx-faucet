@@ -2,8 +2,8 @@ package faucet
 
 import (
 	"github.com/labstack/echo/v4"
-	"github.com/pkg/errors"
 
+	"github.com/iotaledger/hive.go/ierrors"
 	"github.com/iotaledger/inx-app/pkg/httpserver"
 	"github.com/iotaledger/inx-faucet/pkg/faucet"
 )
@@ -16,7 +16,7 @@ func addFaucetOutputToQueue(c echo.Context) (*faucet.EnqueueResponse, error) {
 
 	request := &faucetEnqueueRequest{}
 	if err := c.Bind(request); err != nil {
-		return nil, errors.WithMessagef(httpserver.ErrInvalidParameter, "Invalid Request! Error: %s", err)
+		return nil, ierrors.Wrapf(httpserver.ErrInvalidParameter, "Invalid Request! Error: %s", err)
 	}
 
 	response, err := deps.Faucet.Enqueue(request.Address)

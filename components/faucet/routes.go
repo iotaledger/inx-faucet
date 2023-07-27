@@ -9,9 +9,9 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
-	"github.com/pkg/errors"
 	"golang.org/x/time/rate"
 
+	"github.com/iotaledger/hive.go/ierrors"
 	"github.com/iotaledger/inx-app/pkg/httpserver"
 )
 
@@ -114,10 +114,10 @@ func setupRoutes(e *echo.Echo) {
 			var message string
 
 			var e *echo.HTTPError
-			if errors.As(err, &e) {
+			if ierrors.As(err, &e) {
 				statusCode = e.Code
-				if errors.Is(err, httpserver.ErrInvalidParameter) {
-					message = strings.Replace(err.Error(), ": "+errors.Unwrap(err).Error(), "", 1)
+				if ierrors.Is(err, httpserver.ErrInvalidParameter) {
+					message = strings.Replace(err.Error(), ": "+ierrors.Unwrap(err).Error(), "", 1)
 				} else {
 					message = err.Error()
 				}
