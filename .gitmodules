@@ -1,0 +1,4 @@
+[submodule "components/faucet/frontend"]
+	path = components/faucet/frontend
+	url = https://github.com/iotaledger/chrysalis-faucet.git
+	branch = hornet
