@@ -10,8 +10,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/iotaledger/hive.go/core/daemon"
-	"github.com/iotaledger/hive.go/core/events"
+	"github.com/iotaledger/hive.go/app/daemon"
 	"github.com/iotaledger/hive.go/serializer/v2"
 	"github.com/iotaledger/hornet/v2/pkg/common"
 	"github.com/iotaledger/hornet/v2/pkg/dag"
@@ -378,12 +377,11 @@ func (env *FaucetTestEnv) processFaucetRequests(preFlushFunc func() error) (iota
 	wg.Add(1)
 
 	var tips iotago.BlockIDs
-	onFaucetIssuedBlock := events.NewClosure(func(blockID iotago.BlockID) {
+	unhook := env.Faucet.Events.IssuedBlock.Hook(func(blockID iotago.BlockID) {
 		tips = append(tips, blockID)
 		wg.Done()
-	})
-	env.Faucet.Events.IssuedBlock.Hook(onFaucetIssuedBlock)
-	defer env.Faucet.Events.IssuedBlock.Detach(onFaucetIssuedBlock)
+	}).Unhook
+	defer unhook()
 
 	if preFlushFunc != nil {
 		if err := preFlushFunc(); err != nil {

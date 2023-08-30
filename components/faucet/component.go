@@ -15,9 +15,9 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/iotaledger/hive.go/core/app"
-	"github.com/iotaledger/hive.go/core/app/pkg/shutdown"
-	"github.com/iotaledger/hive.go/core/crypto"
+	"github.com/iotaledger/hive.go/app"
+	"github.com/iotaledger/hive.go/app/shutdown"
+	"github.com/iotaledger/hive.go/crypto"
 	"github.com/iotaledger/hornet/v2/pkg/common"
 	"github.com/iotaledger/inx-app/pkg/httpserver"
 	"github.com/iotaledger/inx-app/pkg/nodebridge"
@@ -34,20 +34,18 @@ const (
 )
 
 func init() {
-	CoreComponent = &app.CoreComponent{
-		Component: &app.Component{
-			Name:     "Faucet",
-			DepsFunc: func(cDeps dependencies) { deps = cDeps },
-			Params:   params,
-			Provide:  provide,
-			Run:      run,
-		},
+	Component = &app.Component{
+		Name:     "Faucet",
+		DepsFunc: func(cDeps dependencies) { deps = cDeps },
+		Params:   params,
+		Provide:  provide,
+		Run:      run,
 	}
 }
 
 var (
-	CoreComponent *app.CoreComponent
-	deps          dependencies
+	Component *app.Component
+	deps      dependencies
 )
 
 type dependencies struct {
@@ -61,20 +59,20 @@ func provide(c *dig.Container) error {
 
 	privateKeys, err := loadEd25519PrivateKeysFromEnvironment("FAUCET_PRV_KEY")
 	if err != nil {
-		CoreComponent.LogErrorfAndExit("loading faucet private key failed, err: %s", err)
+		Component.LogErrorfAndExit("loading faucet private key failed, err: %s", err)
 	}
 
 	if len(privateKeys) == 0 {
-		CoreComponent.LogErrorAndExit("loading faucet private key failed, err: no private keys given")
+		Component.LogErrorAndExit("loading faucet private key failed, err: no private keys given")
 	}
 
 	if len(privateKeys) > 1 {
-		CoreComponent.LogErrorAndExit("loading faucet private key failed, err: too many private keys given")
+		Component.LogErrorAndExit("loading faucet private key failed, err: too many private keys given")
 	}
 
 	privateKey := privateKeys[0]
 	if len(privateKey) != ed25519.PrivateKeySize {
-		CoreComponent.LogErrorAndExit("loading faucet private key failed, err: wrong private key length")
+		Component.LogErrorAndExit("loading faucet private key failed, err: wrong private key length")
 	}
 
 	publicKey, ok := privateKey.Public().(ed25519.PublicKey)
@@ -93,7 +91,7 @@ func provide(c *dig.Container) error {
 	if err := c.Provide(func(deps faucetDeps) (*faucet.Faucet, error) {
 
 		fetchMetadata := func(blockID iotago.BlockID) (*faucet.Metadata, error) {
-			ctx, cancel := context.WithTimeout(CoreComponent.Daemon().ContextStopped(), 5*time.Second)
+			ctx, cancel := context.WithTimeout(Component.Daemon().ContextStopped(), 5*time.Second)
 			defer cancel()
 
 			metadata, err := deps.NodeBridge.BlockMetadata(ctx, blockID)
@@ -115,7 +113,7 @@ func provide(c *dig.Container) error {
 			}, nil
 		}
 
-		ctxIndexer, cancelIndexer := context.WithTimeout(CoreComponent.Daemon().ContextStopped(), indexerPluginAvailableTimeout)
+		ctxIndexer, cancelIndexer := context.WithTimeout(Component.Daemon().ContextStopped(), indexerPluginAvailableTimeout)
 		defer cancelIndexer()
 
 		indexer, err := deps.NodeBridge.Indexer(ctxIndexer)
@@ -124,7 +122,7 @@ func provide(c *dig.Container) error {
 		}
 
 		collectOutputs := func(address iotago.Address) ([]faucet.UTXOOutput, error) {
-			ctxRequest, cancelRequest := context.WithTimeout(CoreComponent.Daemon().ContextStopped(), inxRequestTimeout)
+			ctxRequest, cancelRequest := context.WithTimeout(Component.Daemon().ContextStopped(), inxRequestTimeout)
 			defer cancelRequest()
 
 			protoParas := deps.NodeBridge.ProtocolParameters()
@@ -159,7 +157,7 @@ func provide(c *dig.Container) error {
 				for i := range outputs {
 					basicOutput, ok := outputs[i].(*iotago.BasicOutput)
 					if !ok {
-						CoreComponent.LogWarnf("invalid type: expected *iotago.BasicOutput, got %T", outputs[i])
+						Component.LogWarnf("invalid type: expected *iotago.BasicOutput, got %T", outputs[i])
 
 						continue
 					}
@@ -186,7 +184,7 @@ func provide(c *dig.Container) error {
 		}
 
 		return faucet.New(
-			CoreComponent.Daemon(),
+			Component.Daemon(),
 			fetchMetadata,
 			collectOutputs,
 			deps.NodeBridge.IsNodeHealthy,
@@ -194,7 +192,7 @@ func provide(c *dig.Container) error {
 			&faucetAddress,
 			faucetSigner,
 			submitBlock,
-			faucet.WithLogger(CoreComponent.Logger()),
+			faucet.WithLogger(Component.Logger()),
 			faucet.WithTokenName(deps.NodeBridge.NodeConfig.BaseToken.Name),
 			faucet.WithAmount(ParamsFaucet.Amount),
 			faucet.WithSmallAmount(ParamsFaucet.SmallAmount),
@@ -204,7 +202,7 @@ func provide(c *dig.Container) error {
 			faucet.WithBatchTimeout(ParamsFaucet.BatchTimeout),
 		), nil
 	}); err != nil {
-		CoreComponent.LogPanic(err)
+		Component.LogPanic(err)
 	}
 
 	return nil
@@ -213,7 +211,7 @@ func provide(c *dig.Container) error {
 func run() error {
 
 	// create a background worker that handles the ledger updates
-	if err := CoreComponent.Daemon().BackgroundWorker("Faucet[LedgerUpdates]", func(ctx context.Context) {
+	if err := Component.Daemon().BackgroundWorker("Faucet[LedgerUpdates]", func(ctx context.Context) {
 		if err := deps.NodeBridge.ListenToLedgerUpdates(ctx, 0, 0, func(update *nodebridge.LedgerUpdate) error {
 			createdOutputs := iotago.OutputIDs{}
 			for _, output := range update.Created {
@@ -234,19 +232,19 @@ func run() error {
 			deps.ShutdownHandler.SelfShutdown(fmt.Sprintf("Listening to LedgerUpdates failed, error: %s", err), false)
 		}
 	}, daemon.PriorityStopFaucetLedgerUpdates); err != nil {
-		CoreComponent.LogPanicf("failed to start worker: %s", err)
+		Component.LogPanicf("failed to start worker: %s", err)
 	}
 
 	// create a background worker that handles the enqueued faucet requests
-	if err := CoreComponent.Daemon().BackgroundWorker("Faucet", func(ctx context.Context) {
+	if err := Component.Daemon().BackgroundWorker("Faucet", func(ctx context.Context) {
 		if err := deps.Faucet.RunFaucetLoop(ctx, nil); err != nil && common.IsCriticalError(err) != nil {
 			deps.ShutdownHandler.SelfShutdown(fmt.Sprintf("faucet plugin hit a critical error: %s", err.Error()), true)
 		}
 	}, daemon.PriorityStopFaucet); err != nil {
-		CoreComponent.LogPanicf("failed to start worker: %s", err)
+		Component.LogPanicf("failed to start worker: %s", err)
 	}
 
-	e := httpserver.NewEcho(CoreComponent.Logger(), nil, ParamsFaucet.DebugRequestLoggerEnabled)
+	e := httpserver.NewEcho(Component.Logger(), nil, ParamsFaucet.DebugRequestLoggerEnabled)
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
 		AllowOrigins: []string{"*"},
 		AllowMethods: []string{http.MethodGet, http.MethodPost},
@@ -255,10 +253,10 @@ func run() error {
 	setupRoutes(e)
 
 	go func() {
-		CoreComponent.LogInfof("You can now access the faucet website using: http://%s", ParamsFaucet.BindAddress)
+		Component.LogInfof("You can now access the faucet website using: http://%s", ParamsFaucet.BindAddress)
 
 		if err := e.Start(ParamsFaucet.BindAddress); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			CoreComponent.LogWarnf("Stopped faucet website server due to an error (%s)", err)
+			Component.LogWarnf("Stopped faucet website server due to an error (%s)", err)
 		}
 	}()
 

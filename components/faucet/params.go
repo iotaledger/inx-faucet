@@ -3,7 +3,7 @@ package faucet
 import (
 	"time"
 
-	"github.com/iotaledger/hive.go/core/app"
+	"github.com/iotaledger/hive.go/app"
 	iotago "github.com/iotaledger/iota.go/v3"
 )
 
