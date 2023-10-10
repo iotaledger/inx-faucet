@@ -24,6 +24,7 @@ var (
 	// ErrNothingToProcess is returned when there is no need to sweep or send funds.
 	ErrNothingToProcess = ierrors.New("nothing to process")
 
+	// EmptyBasicOutput is used to calculate the storage deposit of the faucet remainder output.
 	EmptyBasicOutput = &iotago.BasicOutput{
 		Amount: 0,
 		Mana:   0,
@@ -122,7 +123,7 @@ type Faucet struct {
 
 	// used to determine the health status of the node.
 	isNodeHealthyFunc IsNodeHealthyFunc
-	// used to access metadata of a transaction from the node.
+	// used to fetch metadata of a transaction from the node.
 	fetchTransactionMetadataFunc FetchTransactionMetadataFunc
 	// used to collect the unlockable outputs and the balance of the faucet.
 	collectUnlockableFaucetOutputsAndBalanceFunc CollectUnlockableFaucetOutputsAndBalanceFunc
@@ -640,6 +641,7 @@ func (f *Faucet) createTransactionBuilder(api iotago.API, unspentOutputs []UTXOB
 }
 
 // sendFaucetBlock creates a faucet transaction payload and sends it to the block issuer.
+// write lock must be acquired outside.
 func (f *Faucet) sendFaucetBlock(ctx context.Context, unspentOutputs []UTXOBasicOutput, batchedRequests []*queueItem) error {
 	api := f.apiProvider.CurrentAPI()
 
@@ -660,9 +662,6 @@ func (f *Faucet) sendFaucetBlock(ctx context.Context, unspentOutputs []UTXOBasic
 		return ierrors.Errorf("send faucet block failed, error: %w", err)
 	}
 
-	f.Lock()
-	defer f.Unlock()
-
 	f.setPendingTransactionWithoutLocking(&pendingTransaction{
 		BlockID:        blockID,
 		QueuedItems:    batchedRequests,
@@ -675,8 +674,8 @@ func (f *Faucet) sendFaucetBlock(ctx context.Context, unspentOutputs []UTXOBasic
 	return nil
 }
 
-// computeFaucetBalance computes the faucet balance minus the storage deposit for a single basic output.
-func (f *Faucet) computeFaucetBalance() error {
+// computeAndSetFaucetBalance computes the faucet balance minus the storage deposit for a single basic output.
+func (f *Faucet) computeAndSetFaucetBalance() error {
 	_, balance, err := f.collectUnlockableFaucetOutputsAndBalanceFunc()
 	if err != nil {
 		return err
@@ -690,11 +689,89 @@ func (f *Faucet) computeFaucetBalance() error {
 	return nil
 }
 
+// collectRequestsAndSendFaucetBlock collects the requests and sends a faucet block.
+func (f *Faucet) collectRequestsAndSendFaucetBlock(ctx context.Context) error {
+	f.Lock()
+	defer f.Unlock()
+
+	// check if there is a pending transaction before issuing the next one
+	if f.pendingTransaction != nil {
+		select {
+		case <-ctx.Done():
+			// faucet was stopped
+			return nil
+		case <-time.After(time.Second):
+			// wait until the next loop
+			return nil
+		}
+	}
+
+	// first collect requests
+	batchedRequests, err := f.collectRequests(ctx)
+	if err != nil {
+		if ierrors.Is(err, ErrOperationAborted) {
+			return nil
+		}
+		if IsCriticalError(err) != nil {
+			// error is a critical error
+			// => stop the faucet
+			return err
+		}
+		f.logSoftError(err)
+
+		return nil
+	}
+
+	processRequests := func() ([]UTXOBasicOutput, []*queueItem, error) {
+		unspentOutputs, balance, err := f.collectUnlockableFaucetOutputsAndBalanceFunc()
+		if err != nil {
+			return nil, nil, err
+		}
+		f.faucetBalance = balance
+
+		if len(unspentOutputs) < 2 && len(batchedRequests) == 0 {
+			// no need to sweep or send funds
+			return nil, nil, ErrNothingToProcess
+		}
+
+		processableRequests := f.processRequestsWithoutLocking(len(unspentOutputs), balance, batchedRequests)
+
+		return unspentOutputs, processableRequests, nil
+	}
+
+	unspentOutputs, processableRequests, err := processRequests()
+	if err != nil {
+		if !ierrors.Is(err, ErrNothingToProcess) {
+			if IsCriticalError(err) != nil {
+				// error is a critical error
+				// => stop the faucet
+				return err
+			}
+			f.logSoftError(err)
+		}
+
+		return nil
+	}
+
+	if err := f.sendFaucetBlock(ctx, unspentOutputs, processableRequests); err != nil {
+		if IsCriticalError(err) != nil {
+			// error is a critical error
+			// => stop the faucet
+			return err
+		}
+		f.readdRequestsWithoutLocking(processableRequests)
+		f.logSoftError(err)
+
+	}
+
+	return nil
+}
+
 // RunFaucetLoop collects unspent outputs on the faucet address and batches the requests from the queue.
 func (f *Faucet) RunFaucetLoop(ctx context.Context) error {
 
 	// set initial faucet balance
-	if err := f.computeFaucetBalance(); err != nil {
+	if err := f.computeAndSetFaucetBalance(); err != nil {
 		return CriticalError(ierrors.Errorf("reading faucet address balance failed: %s, error: %w", f.address.Bech32(f.apiProvider.CurrentAPI().ProtocolParameters().Bech32HRP()), err))
 	}
 
@@ -705,78 +782,8 @@ func (f *Faucet) RunFaucetLoop(ctx context.Context) error {
 			return nil
 
 		default:
-			f.Lock()
-			pendingTransaction := f.pendingTransaction
-			f.Unlock()
-
-			// check if there is a pending transaction before issuing the next one
-			if pendingTransaction != nil {
-				select {
-				case <-ctx.Done():
-					// faucet was stopped
-					return nil
-				case <-time.After(time.Second):
-					// wait until the next loop
-					continue
-				}
-			}
-
-			// first collect requests
-			batchedRequests, err := f.collectRequests(ctx)
-			if err != nil {
-				if ierrors.Is(err, ErrOperationAborted) {
-					return nil
-				}
-				if IsCriticalError(err) != nil {
-					// error is a critical error
-					// => stop the faucet
-					return err
-				}
-				f.logSoftError(err)
-
-				continue
-			}
-
-			processRequests := func() ([]UTXOBasicOutput, []*queueItem, error) {
-				unspentOutputs, balance, err := f.collectUnlockableFaucetOutputsAndBalanceFunc()
-				if err != nil {
-					return nil, nil, err
-				}
-
-				if len(unspentOutputs) < 2 && len(batchedRequests) == 0 {
-					// no need to sweep or send funds
-					return nil, nil, ErrNothingToProcess
-				}
-
-				processableRequests := f.processRequestsWithoutLocking(len(unspentOutputs), balance, batchedRequests)
-
-				return unspentOutputs, processableRequests, nil
-			}
-
-			unspentOutputs, processableRequests, err := processRequests()
-			if err != nil {
-				if !ierrors.Is(err, ErrNothingToProcess) {
-					if IsCriticalError(err) != nil {
-						// error is a critical error
-						// => stop the faucet
-						return err
-					}
-					f.logSoftError(err)
-				}
-
-				continue
-			}
-
-			if err := f.sendFaucetBlock(ctx, unspentOutputs, processableRequests); err != nil {
-				if IsCriticalError(err) != nil {
-					// error is a critical error
-					// => stop the faucet
-					return err
-				}
-				f.readdRequestsWithoutLocking(processableRequests)
-				f.logSoftError(err)
-
-				continue
+			if err := f.collectRequestsAndSendFaucetBlock(ctx); err != nil {
+				return err
 			}
 		}
 	}
@@ -807,14 +814,14 @@ func (f *Faucet) ApplyNewLedgerUpdate(createdOutputs iotago.OutputIDs, consumedO
 
 	pendingTx := f.pendingTransaction
 
-	clearPendingRequests := func() error {
+	clearPendingRequestsWithoutLocking := func() error {
 		f.clearRequestsWithoutLocking(pendingTx.QueuedItems)
 		f.clearPendingTransactionWithoutLocking()
 
 		return nil
 	}
 
-	readdPendingRequests := func() error {
+	readdPendingRequestsWithoutLocking := func() error {
 		f.readdRequestsWithoutLocking(pendingTx.QueuedItems)
 		f.clearPendingTransactionWithoutLocking()
 
@@ -833,7 +840,7 @@ func (f *Faucet) ApplyNewLedgerUpdate(createdOutputs iotago.OutputIDs, consumedO
 	if _, created := newOutputsMap[txOutputIDIndexZero]; created {
 		// transaction was confirmed
 		// => delete the requests and the pending transaction
-		return clearPendingRequests()
+		return clearPendingRequestsWithoutLocking()
 	}
 
 	// check if the inputs of the pending transaction were affected by the ledger update.
@@ -843,20 +850,20 @@ func (f *Faucet) ApplyNewLedgerUpdate(createdOutputs iotago.OutputIDs, consumedO
 			// since the output index 0 of the pending transaction was not created,
 			// it means that the transaction was conflicting with another one.
 			// => readd the items to the queue and delete the pending transaction
-			return readdPendingRequests()
+			return readdPendingRequestsWithoutLocking()
 		}
 	}
 
 	metadata, err := f.fetchTransactionMetadataFunc(pendingTx.BlockID)
 	if err != nil {
 		// an error occurred => re-add the items to the queue and delete the pending transaction
-		return readdPendingRequests()
+		return readdPendingRequestsWithoutLocking()
 	}
 
 	if metadata == nil {
 		// block unknown, this can only happen if the block was orphaned.
 		// => re-add the items to the queue and delete the pending transaction
-		return readdPendingRequests()
+		return readdPendingRequestsWithoutLocking()
 	}
 
 	switch metadata.State {
@@ -869,14 +876,14 @@ func (f *Faucet) ApplyNewLedgerUpdate(createdOutputs iotago.OutputIDs, consumedO
 	case inx.BlockMetadata_TRANSACTION_STATE_ACCEPTED, inx.BlockMetadata_TRANSACTION_STATE_CONFIRMED, inx.BlockMetadata_TRANSACTION_STATE_FINALIZED:
 		// transaction was confirmed
 		// => delete the requests and the pending transaction
-		return clearPendingRequests()
+		return clearPendingRequestsWithoutLocking()
 
 	case inx.BlockMetadata_TRANSACTION_STATE_FAILED:
 		// transaction failed
 		// => re-add the items to the queue and delete the pending transaction
 		f.logSoftError(ierrors.Errorf("transaction failed, blockID: %s, txID: %s, reason: %d", pendingTx.BlockID, pendingTx.TransactionID, metadata.FailureReason))
 
-		return readdPendingRequests()
+		return readdPendingRequestsWithoutLocking()
 	}
 
 	return nil

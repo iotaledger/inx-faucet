@@ -100,7 +100,7 @@ func provide(c *dig.Container) error {
 			if err != nil {
 				st, ok := status.FromError(err)
 				if ok && st.Code() == codes.NotFound {
-					// the block is either not found yet, or it was evicted
+					// the block is either not found, or it was evicted
 					//nolint:nilnil // nil, nil is ok in this context, even if it is not go idiomatic
 					return nil, nil
 				}
@@ -130,11 +130,11 @@ func provide(c *dig.Container) error {
 			falseCondition := false
 			query := &apimodels.BasicOutputsQuery{
 				AddressBech32: faucetAddressRestricted.Bech32(deps.NodeBridge.APIProvider().CurrentAPI().ProtocolParameters().Bech32HRP()),
-				IndexerExpirationParams: apimodels.IndexerExpirationParams{
-					HasExpiration: &falseCondition,
-				},
 				IndexerTimelockParams: apimodels.IndexerTimelockParams{
 					HasTimelock: &falseCondition,
+				},
+				IndexerExpirationParams: apimodels.IndexerExpirationParams{
+					HasExpiration: &falseCondition,
 				},
 				IndexerStorageDepositParams: apimodels.IndexerStorageDepositParams{
 					HasStorageDepositReturn: &falseCondition,
@@ -215,6 +215,7 @@ func provide(c *dig.Container) error {
 						continue
 					}
 
+					//nolint:godox
 					// TODO: what are the correct bounds here?
 					maxFutureBoundedSlotIndex := lastAcceptedBlockSlot + deps.NodeBridge.APIProvider().CurrentAPI().ProtocolParameters().MinCommittableAge()
 					minPastBoundedSlotIndex := lastAcceptedBlockSlot + deps.NodeBridge.APIProvider().CurrentAPI().ProtocolParameters().MaxCommittableAge()
