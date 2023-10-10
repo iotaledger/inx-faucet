@@ -33,7 +33,7 @@
     "smallAmount": 100000000,
     "maxAddressBalance": 2000000000,
     "maxOutputCount": 128,
-    "tagMessage": "HORNET FAUCET",
+    "tagMessage": "FAUCET",
     "batchTimeout": "2s",
     "bindAddress": "localhost:8091",
     "rateLimit": {
@@ -41,6 +41,9 @@
       "period": "5m",
       "maxRequests": 10,
       "maxBurst": 20
+    },
+    "pow": {
+      "workerCount": 4
     },
     "debugRequestLoggerEnabled": false
   },
