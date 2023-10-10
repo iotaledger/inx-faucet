@@ -22,8 +22,9 @@ import (
 	"github.com/iotaledger/inx-app/pkg/nodebridge"
 	"github.com/iotaledger/inx-faucet/pkg/daemon"
 	"github.com/iotaledger/inx-faucet/pkg/faucet"
-	inx "github.com/iotaledger/inx/go"
 	iotago "github.com/iotaledger/iota.go/v4"
+	"github.com/iotaledger/iota.go/v4/builder"
+	"github.com/iotaledger/iota.go/v4/nodeclient"
 	"github.com/iotaledger/iota.go/v4/nodeclient/apimodels"
 )
 
@@ -56,40 +57,42 @@ type dependencies struct {
 
 func provide(c *dig.Container) error {
 
-	privateKeys, err := loadEd25519PrivateKeysFromEnvironment("FAUCET_PRV_KEY")
+	// we use a restricted address for the faucet, so we don't need to filter indexer requests.
+	// we only allow to receive mana, the rest is blocked.
+	faucetAddressRestricted, faucetSigner, err := getRestrictedFaucetAddressAndSigner()
 	if err != nil {
-		Component.LogErrorfAndExit("loading faucet private key failed, err: %s", err)
+		Component.LogErrorAndExit(err)
 	}
 
-	if len(privateKeys) == 0 {
-		Component.LogErrorAndExit("loading faucet private key failed, err: no private keys given")
-	}
-
-	if len(privateKeys) > 1 {
-		Component.LogErrorAndExit("loading faucet private key failed, err: too many private keys given")
-	}
-
-	privateKey := privateKeys[0]
-	if len(privateKey) != ed25519.PrivateKeySize {
-		Component.LogErrorAndExit("loading faucet private key failed, err: wrong private key length")
-	}
-
-	publicKey, ok := privateKey.Public().(ed25519.PublicKey)
-	if !ok {
-		panic(fmt.Sprintf("invalid type: expected ed25519.PublicKey, got %T", privateKey.Public()))
-	}
-
-	faucetAddress := iotago.Ed25519AddressFromPubKey(publicKey)
-	faucetSigner := iotago.NewInMemoryAddressSigner(iotago.NewAddressKeysForEd25519Address(faucetAddress, privateKey))
-
-	type faucetDeps struct {
+	// get the block issuer client
+	type blockIssuerClientDeps struct {
 		dig.In
 		NodeBridge *nodebridge.NodeBridge
 	}
 
+	if err := c.Provide(func(deps blockIssuerClientDeps) (nodeclient.BlockIssuerClient, error) {
+		nodeClient, err := deps.NodeBridge.INXNodeClient()
+		if err != nil {
+			return nil, err
+		}
+
+		ctx, cancel := context.WithTimeout(Component.Daemon().ContextStopped(), 5*time.Second)
+		defer cancel()
+
+		return nodeClient.BlockIssuer(ctx)
+	}); err != nil {
+		Component.LogPanic(err)
+	}
+
+	type faucetDeps struct {
+		dig.In
+		NodeBridge        *nodebridge.NodeBridge
+		BlockIssuerClient nodeclient.BlockIssuerClient
+	}
+
 	if err := c.Provide(func(deps faucetDeps) (*faucet.Faucet, error) {
 
-		fetchMetadata := func(blockID iotago.BlockID) (*faucet.Metadata, error) {
+		fetchTransactionMetadata := func(blockID iotago.BlockID) (*faucet.TransactionMetadata, error) {
 			ctx, cancel := context.WithTimeout(Component.Daemon().ContextStopped(), 5*time.Second)
 			defer cancel()
 
@@ -97,6 +100,7 @@ func provide(c *dig.Container) error {
 			if err != nil {
 				st, ok := status.FromError(err)
 				if ok && st.Code() == codes.NotFound {
+					// the block is either not found yet, or it was evicted
 					//nolint:nilnil // nil, nil is ok in this context, even if it is not go idiomatic
 					return nil, nil
 				}
@@ -104,12 +108,9 @@ func provide(c *dig.Container) error {
 				return nil, err
 			}
 
-			return &faucet.Metadata{
-				// TODO: this needs to be adapted to the new states
-				IsReferenced: metadata.GetBlockState() == inx.BlockMetadata_BLOCK_STATE_CONFIRMED,
-				//nolint:nosnakecase // grpc uses underscores
-				IsConflicting: metadata.GetTxFailureReason() != inx.BlockMetadata_TRANSACTION_FAILURE_REASON_NONE,
-				//ShouldReattach: metadata.GetShouldReattach(),
+			return &faucet.TransactionMetadata{
+				State:         metadata.GetTxState(),
+				FailureReason: metadata.GetTxFailureReason(),
 			}, nil
 		}
 
@@ -121,15 +122,14 @@ func provide(c *dig.Container) error {
 			return nil, err
 		}
 
-		collectOutputs := func(address iotago.Address) ([]faucet.UTXOOutput, error) {
+		collectUnlockableFaucetOutputs := func() ([]faucet.UTXOBasicOutput, error) {
 			ctxRequest, cancelRequest := context.WithTimeout(Component.Daemon().ContextStopped(), inxRequestTimeout)
 			defer cancelRequest()
 
-			protocolParams := deps.NodeBridge.APIProvider().CurrentAPI().ProtocolParameters()
-
+			// simple outputs are basic outputs without timelocks, expiration, native tokens, storage deposit return unlocks conditions.
 			falseCondition := false
 			query := &apimodels.BasicOutputsQuery{
-				AddressBech32: address.Bech32(protocolParams.Bech32HRP()),
+				AddressBech32: faucetAddressRestricted.Bech32(deps.NodeBridge.APIProvider().CurrentAPI().ProtocolParameters().Bech32HRP()),
 				IndexerExpirationParams: apimodels.IndexerExpirationParams{
 					HasExpiration: &falseCondition,
 				},
@@ -139,6 +139,9 @@ func provide(c *dig.Container) error {
 				IndexerStorageDepositParams: apimodels.IndexerStorageDepositParams{
 					HasStorageDepositReturn: &falseCondition,
 				},
+				IndexerNativeTokenParams: apimodels.IndexerNativeTokenParams{
+					HasNativeTokens: &falseCondition,
+				},
 			}
 
 			result, err := indexer.Outputs(ctxRequest, query)
@@ -146,7 +149,7 @@ func provide(c *dig.Container) error {
 				return nil, err
 			}
 
-			faucetOutputs := []faucet.UTXOOutput{}
+			faucetOutputs := make([]faucet.UTXOBasicOutput, 0)
 			for result.Next() {
 				outputs, err := result.Outputs(ctxRequest)
 				if err != nil {
@@ -162,7 +165,7 @@ func provide(c *dig.Container) error {
 						continue
 					}
 
-					faucetOutputs = append(faucetOutputs, faucet.UTXOOutput{
+					faucetOutputs = append(faucetOutputs, faucet.UTXOBasicOutput{
 						OutputID: outputIDs[i],
 						Output:   basicOutput,
 					})
@@ -175,24 +178,89 @@ func provide(c *dig.Container) error {
 			return faucetOutputs, nil
 		}
 
-		submitBlock := func(ctx context.Context, block *iotago.ProtocolBlock) (iotago.BlockID, error) {
-			// TODO: do we need synced?
-			if !deps.NodeBridge.IsNodeHealthy() {
-				return iotago.BlockID{}, ierrors.New("node is not synced")
+		computeUnlockableAddressBalance := func(address iotago.Address) (iotago.BaseToken, error) {
+			ctxRequest, cancelRequest := context.WithTimeout(Component.Daemon().ContextStopped(), inxRequestTimeout)
+			defer cancelRequest()
+
+			// collect all possible outputs that are owned by that address and evaluate later if they are unlockable.
+			query := &apimodels.OutputsQuery{
+				IndexerUnlockableByAddressParams: apimodels.IndexerUnlockableByAddressParams{
+					UnlockableByAddressBech32: address.Bech32(deps.NodeBridge.APIProvider().CurrentAPI().ProtocolParameters().Bech32HRP()),
+				},
 			}
 
-			return deps.NodeBridge.SubmitBlock(ctx, block)
+			result, err := indexer.Outputs(ctxRequest, query)
+			if err != nil {
+				return 0, err
+			}
+
+			var unlockableBalance iotago.BaseToken
+			for result.Next() {
+				outputs, err := result.Outputs(ctxRequest)
+				if err != nil {
+					return 0, err
+				}
+
+				for i := range outputs {
+					output := outputs[i]
+
+					if output.UnlockConditionSet().HasStorageDepositReturnCondition() && output.UnlockConditionSet().StorageDepositReturn().ReturnAddress.Equal(address) {
+						// we don't care about addresses in the storage deposit return unlock conditions
+						continue
+					}
+
+					lastAcceptedBlockSlot := iotago.SlotIndex(deps.NodeBridge.NodeStatus().LastAcceptedBlockSlot)
+					if output.UnlockConditionSet().HasTimelockUntil(lastAcceptedBlockSlot) {
+						// ignore timelocked outputs for balance calculation
+						continue
+					}
+
+					// TODO: what are the correct bounds here?
+					maxFutureBoundedSlotIndex := lastAcceptedBlockSlot + deps.NodeBridge.APIProvider().CurrentAPI().ProtocolParameters().MinCommittableAge()
+					minPastBoundedSlotIndex := lastAcceptedBlockSlot + deps.NodeBridge.APIProvider().CurrentAPI().ProtocolParameters().MaxCommittableAge()
+
+					actualIdentToUnlock, err := output.UnlockConditionSet().CheckExpirationCondition(maxFutureBoundedSlotIndex, minPastBoundedSlotIndex)
+					if err != nil {
+						// this means the output has an unlock condition and it is currently in the blocked range around the expiration slot.
+						// => add the balance to the expiration return address, because it will belong to this address after the blocked range.
+						if !output.UnlockConditionSet().Expiration().ReturnAddress.Equal(address) {
+							// the output belongs to the expiration return address, but this is not the address in the request
+							continue
+						}
+					} else if actualIdentToUnlock != nil && !actualIdentToUnlock.Equal(address) {
+						// the output belongs to the expiration return address, but this is not the address in the request
+						continue
+					}
+
+					unlockableBalance += outputs[i].BaseTokenAmount()
+				}
+			}
+			if result.Error != nil {
+				return 0, result.Error
+			}
+
+			return unlockableBalance, nil
+		}
+
+		submitTransactionPayload := func(ctx context.Context, builder *builder.TransactionBuilder, signer iotago.AddressSigner, storedManaOutputIndex int, numPoWWorkers ...int) (iotago.BlockPayload, iotago.BlockID, error) {
+			signedTx, blockCreatedResponse, err := deps.BlockIssuerClient.SendPayloadWithTransactionBuilder(ctx, builder, signer, storedManaOutputIndex, numPoWWorkers...)
+			if err != nil {
+				return nil, iotago.EmptyBlockID, err
+			}
+
+			return signedTx, blockCreatedResponse.BlockID, nil
 		}
 
 		return faucet.New(
 			Component.Daemon(),
-			fetchMetadata,
-			collectOutputs,
 			deps.NodeBridge.IsNodeHealthy,
+			fetchTransactionMetadata,
+			collectUnlockableFaucetOutputs,
+			computeUnlockableAddressBalance,
+			submitTransactionPayload,
 			deps.NodeBridge.APIProvider(),
-			faucetAddress,
+			faucetAddressRestricted,
 			faucetSigner,
-			submitBlock,
 			faucet.WithLogger(Component.Logger()),
 			faucet.WithTokenName(deps.NodeBridge.NodeConfig.BaseToken.Name),
 			faucet.WithAmount(iotago.BaseToken(ParamsFaucet.Amount)),
@@ -201,6 +269,7 @@ func provide(c *dig.Container) error {
 			faucet.WithMaxOutputCount(ParamsFaucet.MaxOutputCount),
 			faucet.WithTagMessage(ParamsFaucet.TagMessage),
 			faucet.WithBatchTimeout(ParamsFaucet.BatchTimeout),
+			faucet.WithPoWWorkerCount(ParamsFaucet.PoW.WorkerCount),
 		), nil
 	}); err != nil {
 		Component.LogPanic(err)
@@ -238,7 +307,7 @@ func run() error {
 
 	// create a background worker that handles the enqueued faucet requests
 	if err := Component.Daemon().BackgroundWorker("Faucet", func(ctx context.Context) {
-		if err := deps.Faucet.RunFaucetLoop(ctx, nil); err != nil && faucet.IsCriticalError(err) != nil {
+		if err := deps.Faucet.RunFaucetLoop(ctx); err != nil && faucet.IsCriticalError(err) != nil {
 			deps.ShutdownHandler.SelfShutdown(fmt.Sprintf("faucet plugin hit a critical error: %s", err.Error()), true)
 		}
 	}, daemon.PriorityStopFaucet); err != nil {
@@ -287,4 +356,39 @@ func loadEd25519PrivateKeysFromEnvironment(name string) ([]ed25519.PrivateKey, e
 	}
 
 	return privateKeys, nil
+}
+
+func getRestrictedFaucetAddressAndSigner() (iotago.Address, iotago.AddressSigner, error) {
+	privateKeys, err := loadEd25519PrivateKeysFromEnvironment("FAUCET_PRV_KEY")
+	if err != nil {
+		return nil, nil, ierrors.Errorf("loading faucet private key failed, err: %w", err)
+	}
+
+	if len(privateKeys) == 0 {
+		return nil, nil, ierrors.New("loading faucet private key failed, err: no private keys given")
+	}
+
+	if len(privateKeys) > 1 {
+		return nil, nil, ierrors.New("loading faucet private key failed, err: too many private keys given")
+	}
+
+	privateKey := privateKeys[0]
+	if len(privateKey) != ed25519.PrivateKeySize {
+		return nil, nil, ierrors.New("loading faucet private key failed, err: wrong private key length")
+	}
+
+	publicKey, ok := privateKey.Public().(ed25519.PublicKey)
+	if !ok {
+		return nil, nil, ierrors.Errorf("invalid type: expected ed25519.PublicKey, got %T", privateKey.Public())
+	}
+
+	faucetAddress := iotago.Ed25519AddressFromPubKey(publicKey)
+	faucetSigner := iotago.NewInMemoryAddressSigner(iotago.NewAddressKeysForEd25519Address(faucetAddress, privateKey))
+
+	faucetAddressRestricted := iotago.RestrictedAddressWithCapabilities(
+		faucetAddress,
+		iotago.WithAddressCanReceiveMana(true),
+	)
+
+	return faucetAddressRestricted, faucetSigner, nil
 }

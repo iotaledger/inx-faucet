@@ -12,7 +12,7 @@ type ParametersFaucet struct {
 	SmallAmount       uint64        `default:"100000000" usage:"the amount of funds the requester receives if the target address has more funds than the faucet amount and less than maximum"`
 	MaxAddressBalance uint64        `default:"2000000000" usage:"the maximum allowed amount of funds on the target address"`
 	MaxOutputCount    int           `usage:"the maximum output count per faucet message"`
-	TagMessage        string        `default:"HORNET FAUCET" usage:"the faucet transaction tag payload"`
+	TagMessage        string        `default:"FAUCET" usage:"the faucet transaction tag payload"`
 	BatchTimeout      time.Duration `default:"2s" usage:"the maximum duration for collecting faucet batches"`
 	BindAddress       string        `default:"localhost:8091" usage:"the bind address on which the faucet website can be accessed from"`
 	RateLimit         struct {
@@ -21,6 +21,10 @@ type ParametersFaucet struct {
 		MaxRequests int           `default:"10" usage:"the maximum number of requests per period"`
 		MaxBurst    int           `default:"20" usage:"additional requests allowed in the burst period"`
 	}
+	PoW struct {
+		// the amount of workers used for calculating PoW when sending payloads to the block issuer
+		WorkerCount int `default:"4" usage:"the amount of workers used for calculating PoW when sending payloads to the block issuer"`
+	} `name:"pow"`
 	// DebugRequestLoggerEnabled defines whether the debug logging for requests should be enabled
 	DebugRequestLoggerEnabled bool `default:"false" usage:"whether the debug logging for requests should be enabled"`
 }
