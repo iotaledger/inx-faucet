@@ -13,6 +13,7 @@ import (
 
 	"github.com/iotaledger/hive.go/ierrors"
 	"github.com/iotaledger/inx-app/pkg/httpserver"
+	"github.com/iotaledger/inx-faucet/pkg/faucet"
 )
 
 const (
@@ -38,6 +39,20 @@ func enforceMaxOneDotPerURL(next echo.HandlerFunc) echo.HandlerFunc {
 	}
 }
 
+func addFaucetOutputToQueue(c echo.Context) (*faucet.EnqueueResponse, error) {
+	request := &faucetEnqueueRequest{}
+	if err := c.Bind(request); err != nil {
+		return nil, ierrors.Wrapf(httpserver.ErrInvalidParameter, "Invalid Request! Error: %s", err)
+	}
+
+	response, err := deps.Faucet.Enqueue(request.Address)
+	if err != nil {
+		return nil, err
+	}
+
+	return response, nil
+}
+
 func setupRoutes(e *echo.Echo) {
 
 	e.Pre(enforceMaxOneDotPerURL)
@@ -45,7 +60,7 @@ func setupRoutes(e *echo.Echo) {
 	e.Group("/*").Use(frontendMiddleware())
 
 	e.GET(RouteFaucetHealth, func(c echo.Context) error {
-		if !deps.NodeBridge.NodeStatus().IsHealthy {
+		if !deps.Faucet.IsHealthy() {
 			return c.NoContent(http.StatusServiceUnavailable)
 		}
 
@@ -55,30 +70,30 @@ func setupRoutes(e *echo.Echo) {
 	// Pass all the requests through to the local rest API
 	apiGroup := e.Group("/api")
 
-	allowedRoutes := map[string][]string{
-		http.MethodGet: {
-			"/api/info",
-		},
-	}
+	if ParamsFaucet.RateLimit.Enabled {
+		allowedRoutes := map[string][]string{
+			http.MethodGet: {
+				"/api/info",
+			},
+		}
 
-	rateLimiterSkipper := func(context echo.Context) bool {
-		// Check for which route we will skip the rate limiter
-		routesForMethod, exists := allowedRoutes[context.Request().Method]
-		if !exists {
+		rateLimiterSkipper := func(context echo.Context) bool {
+			// Check for which route we will skip the rate limiter
+			routesForMethod, exists := allowedRoutes[context.Request().Method]
+			if !exists {
+				return false
+			}
+
+			path := context.Request().URL.EscapedPath()
+			for _, prefix := range routesForMethod {
+				if strings.HasPrefix(path, prefix) {
+					return true
+				}
+			}
+
 			return false
 		}
 
-		path := context.Request().URL.EscapedPath()
-		for _, prefix := range routesForMethod {
-			if strings.HasPrefix(path, prefix) {
-				return true
-			}
-		}
-
-		return false
-	}
-
-	if ParamsFaucet.RateLimit.Enabled {
 		rateLimiterConfig := middleware.RateLimiterConfig{
 			Skipper: rateLimiterSkipper,
 			Store: middleware.NewRateLimiterMemoryStoreWithConfig(
@@ -98,7 +113,7 @@ func setupRoutes(e *echo.Echo) {
 	}
 
 	apiGroup.GET(RouteFaucetInfo, func(c echo.Context) error {
-		resp, err := getFaucetInfo(c)
+		resp, err := deps.Faucet.Info()
 		if err != nil {
 			return err
 		}

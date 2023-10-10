@@ -136,10 +136,11 @@ Example:
 | smallAmount                    | The amount of funds the requester receives if the target address has more funds than the faucet amount and less than maximum | uint    | 100000000        |
 | maxAddressBalance              | The maximum allowed amount of funds on the target address                                                                    | uint    | 2000000000       |
 | maxOutputCount                 | The maximum output count per faucet message                                                                                  | int     | 128              |
-| tagMessage                     | The faucet transaction tag payload                                                                                           | string  | "HORNET FAUCET"  |
+| tagMessage                     | The faucet transaction tag payload                                                                                           | string  | "FAUCET"         |
 | batchTimeout                   | The maximum duration for collecting faucet batches                                                                           | string  | "2s"             |
 | bindAddress                    | The bind address on which the faucet website can be accessed from                                                            | string  | "localhost:8091" |
 | [rateLimit](#faucet_ratelimit) | Configuration for rateLimit                                                                                                  | object  |                  |
+| [pow](#faucet_pow)             | Configuration for pow                                                                                                        | object  |                  |
 | debugRequestLoggerEnabled      | Whether the debug logging for requests should be enabled                                                                     | boolean | false            |
 
 ### <a id="faucet_ratelimit"></a> RateLimit
@@ -151,6 +152,12 @@ Example:
 | maxRequests | The maximum number of requests per period       | int     | 10            |
 | maxBurst    | Additional requests allowed in the burst period | int     | 20            |
 
+### <a id="faucet_pow"></a> Pow
+
+| Name        | Description                                                                              | Type | Default value |
+| ----------- | ---------------------------------------------------------------------------------------- | ---- | ------------- |
+| workerCount | The amount of workers used for calculating PoW when sending payloads to the block issuer | int  | 4             |
+
 Example:
 
 ```json
@@ -160,7 +167,7 @@ Example:
       "smallAmount": 100000000,
       "maxAddressBalance": 2000000000,
       "maxOutputCount": 128,
-      "tagMessage": "HORNET FAUCET",
+      "tagMessage": "FAUCET",
       "batchTimeout": "2s",
       "bindAddress": "localhost:8091",
       "rateLimit": {
@@ -168,6 +175,9 @@ Example:
         "period": "5m",
         "maxRequests": 10,
         "maxBurst": 20
+      },
+      "pow": {
+        "workerCount": 4
       },
       "debugRequestLoggerEnabled": false
     }

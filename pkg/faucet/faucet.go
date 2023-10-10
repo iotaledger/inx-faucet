@@ -1,9 +1,8 @@
+//nolint:nosnakecase // grpc uses underscores
 package faucet
 
 import (
-	"bytes"
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/labstack/echo/v4"
@@ -14,44 +13,59 @@ import (
 	"github.com/iotaledger/hive.go/runtime/event"
 	"github.com/iotaledger/hive.go/runtime/syncutils"
 	"github.com/iotaledger/inx-app/pkg/httpserver"
+	inx "github.com/iotaledger/inx/go"
 	iotago "github.com/iotaledger/iota.go/v4"
-	"github.com/iotaledger/iota.go/v4/api"
 	"github.com/iotaledger/iota.go/v4/builder"
 )
 
 var (
 	// ErrOperationAborted is returned when the operation was aborted e.g. by a shutdown signal.
 	ErrOperationAborted = ierrors.New("operation was aborted")
+	// ErrNothingToProcess is returned when there is no need to sweep or send funds.
+	ErrNothingToProcess = ierrors.New("nothing to process")
+
+	// EmptyBasicOutput is used to calculate the storage deposit of the faucet remainder output.
+	EmptyBasicOutput = &iotago.BasicOutput{
+		Amount: 0,
+		Mana:   0,
+		Conditions: iotago.BasicOutputUnlockConditions{
+			&iotago.AddressUnlockCondition{
+				Address: &iotago.RestrictedAddress{
+					Address:             &iotago.Ed25519Address{},
+					AllowedCapabilities: iotago.AddressCapabilitiesBitMaskWithCapabilities(iotago.WithAddressCanReceiveMana(true)),
+				},
+			},
+		},
+		Features: iotago.BasicOutputFeatures{},
+	}
 )
 
-// IsNodeHealthyFunc is a function to query if the used node is synced.
-type IsNodeHealthyFunc = func() bool
-
-// SendBlockFunc is a function which sends a block to the network.
-type SendBlockFunc = func(ctx context.Context, block *iotago.ProtocolBlock) (iotago.BlockID, error)
-
-// Metadata contains the basic block metadata required by the faucet.
-type Metadata struct {
-	IsReferenced   bool
-	IsConflicting  bool
-	ShouldReattach bool
+// TransactionMetadata contains the transaction metadata required by the faucet.
+type TransactionMetadata struct {
+	State         inx.BlockMetadata_TransactionState
+	FailureReason inx.BlockMetadata_TransactionFailureReason
 }
 
-// BlockMetadataFunc is a function to fetch the required metadata for a given block ID.
-// This should return nil if the block is not found.
-type BlockMetadataFunc = func(blockID iotago.BlockID) (*Metadata, error)
+type (
+	// IsNodeHealthyFunc is a function to query if the used node is synced.
+	IsNodeHealthyFunc func() bool
+	// FetchTransactionMetadataFunc is a function to fetch the required metadata of a transaction contained in a block for a given block ID.
+	// This returns nil if the block is not found.
+	FetchTransactionMetadataFunc func(blockID iotago.BlockID) (*TransactionMetadata, error)
+	// CollectUnlockableFaucetOutputsFunc is a function to collect the unlockable outputs of the faucet.
+	CollectUnlockableFaucetOutputsFunc func() ([]UTXOBasicOutput, error)
+	// CollectUnlockableFaucetOutputsAndBalanceFunc is a function to collect the unlockable outputs and the balance of the faucet.
+	CollectUnlockableFaucetOutputsAndBalanceFunc func() ([]UTXOBasicOutput, iotago.BaseToken, error)
+	// ComputeUnlockableAddressBalanceFunc is a function to compute the unlockable balance of an address.
+	ComputeUnlockableAddressBalanceFunc func(address iotago.Address) (iotago.BaseToken, error)
+	// SubmitTransactionPayloadFunc is a function which creates a signed transaction payload and sends it to a block issuer.
+	SubmitTransactionPayloadFunc func(ctx context.Context, builder *builder.TransactionBuilder, signer iotago.AddressSigner, storedManaOutputIndex int, numPoWWorkers ...int) (iotago.BlockPayload, iotago.BlockID, error)
+)
 
-type UTXOOutput struct {
+type UTXOBasicOutput struct {
 	OutputID iotago.OutputID
 	Output   *iotago.BasicOutput
 }
-
-type BasicOutputsForAddressFunc = func(address iotago.Address) ([]UTXOOutput, error)
-
-var (
-	// ErrNothingToProcess is returned when there is no need to sweep or send funds.
-	ErrNothingToProcess = ierrors.New("nothing to process")
-)
 
 // Events are the events issued by the faucet.
 type Events struct {
@@ -71,9 +85,9 @@ type queueItem struct {
 // pendingTransaction holds info about a sent transaction that is pending.
 type pendingTransaction struct {
 	BlockID        iotago.BlockID
+	TransactionID  iotago.TransactionID
 	QueuedItems    []*queueItem
 	ConsumedInputs iotago.OutputIDs
-	TransactionID  iotago.TransactionID
 }
 
 // InfoResponse defines the response of a GET RouteFaucetInfo REST API call.
@@ -104,23 +118,26 @@ type Faucet struct {
 	syncutils.Mutex
 	// the logger used to log events.
 	*logger.WrappedLogger
-
 	// used to access the global daemon.
 	daemon daemon.Daemon
-	// used to access metadata of a block from the node.
-	blockMetadataFunc BlockMetadataFunc
-	// used to collect unspent outputs for a given address.
-	collectOutputsFunc BasicOutputsForAddressFunc
+
 	// used to determine the health status of the node.
-	nodeHealthyFunc IsNodeHealthyFunc
-	// the api Provider
-	apiProvider api.Provider
+	isNodeHealthyFunc IsNodeHealthyFunc
+	// used to fetch metadata of a transaction from the node.
+	fetchTransactionMetadataFunc FetchTransactionMetadataFunc
+	// used to collect the unlockable outputs and the balance of the faucet.
+	collectUnlockableFaucetOutputsAndBalanceFunc CollectUnlockableFaucetOutputsAndBalanceFunc
+	// used to compute the unlockable balance of an address.
+	computeUnlockableAddressBalanceFunc ComputeUnlockableAddressBalanceFunc
+	// used to create a signed transaction payload and send it to a block issuer.
+	submitTransactionPayloadFunc SubmitTransactionPayloadFunc
+
+	// the api Provider.
+	apiProvider iotago.APIProvider
 	// the address of the faucet.
 	address iotago.Address
 	// used to sign the faucet transactions.
 	addressSigner iotago.AddressSigner
-	// the function used to send a block.
-	sendBlockFunc SendBlockFunc
 	// holds the faucet options.
 	opts *Options
 
@@ -135,23 +152,18 @@ type Faucet struct {
 	queueMap map[string]*queueItem
 	// flushQueue is used to signal to stop an ongoing batching of faucet requests.
 	flushQueue chan struct{}
-	// pendingTransactionsMap is a map of sent transactions that are pending.
-	pendingTransactionsMap map[string]*pendingTransaction
-	// the block ID of the last sent faucet block.
-	lastBlockID *iotago.BlockID
-	// the latest unused UTXO output that may not be confirmed yet but can be reused in new transactions.
-	// this is used to issue multiple transactions without waiting for the confirmation by milestones.
-	lastRemainderOutput *UTXOOutput
+	// pendingTransaction is the currently sent transaction that is still pending.
+	pendingTransaction *pendingTransaction
 }
 
 // the default options applied to the faucet.
 var defaultOptions = []Option{
 	WithTokenName("TestToken"),
-	WithAmount(10000000),            // 10 Mi
-	WithSmallAmount(1000000),        // 1 Mi
-	WithMaxAddressBalance(20000000), // 20 Mi
+	WithAmount(10_000_000),            // 10 IOTA
+	WithSmallAmount(1_000_000),        // 1 IOTA
+	WithMaxAddressBalance(20_000_000), // 20 IOTA
 	WithMaxOutputCount(iotago.MaxOutputsCount),
-	WithTagMessage("HORNET FAUCET"),
+	WithTagMessage("FAUCET"),
 	WithBatchTimeout(2 * time.Second),
 }
 
@@ -166,6 +178,7 @@ type Options struct {
 	maxOutputCount    int
 	tagMessage        []byte
 	batchTimeout      time.Duration
+	powWorkerCount    int
 }
 
 // applies the given Option.
@@ -239,19 +252,27 @@ func WithBatchTimeout(timeout time.Duration) Option {
 	}
 }
 
+// WithPoWWorkerCount sets the amount of workers used for calculating PoW when sending payloads to the block issuer.
+func WithPoWWorkerCount(powWorkerCount int) Option {
+	return func(opts *Options) {
+		opts.powWorkerCount = powWorkerCount
+	}
+}
+
 // Option is a function setting a faucet option.
 type Option func(opts *Options)
 
 // New creates a new faucet instance.
 func New(
 	daemon daemon.Daemon,
-	blockMetadataFunc BlockMetadataFunc,
-	collectOutputsFunc BasicOutputsForAddressFunc,
-	nodeHealthyFunc IsNodeHealthyFunc,
-	apiProvider api.Provider,
+	isNodeHealthyFunc IsNodeHealthyFunc,
+	fetchTransactionMetadataFunc FetchTransactionMetadataFunc,
+	collectUnlockableFaucetOutputsFunc CollectUnlockableFaucetOutputsFunc,
+	computeUnlockableAddressBalanceFunc ComputeUnlockableAddressBalanceFunc,
+	submitTransactionPayloadFunc SubmitTransactionPayloadFunc,
+	apiProvider iotago.APIProvider,
 	address iotago.Address,
 	addressSigner iotago.AddressSigner,
-	sendBlockFunc SendBlockFunc,
 	opts ...Option) *Faucet {
 
 	options := &Options{}
@@ -259,21 +280,62 @@ func New(
 	options.apply(opts...)
 
 	faucet := &Faucet{
-		daemon:             daemon,
-		blockMetadataFunc:  blockMetadataFunc,
-		collectOutputsFunc: collectOutputsFunc,
-		nodeHealthyFunc:    nodeHealthyFunc,
-		apiProvider:        apiProvider,
-		address:            address,
-		addressSigner:      addressSigner,
-		sendBlockFunc:      sendBlockFunc,
-		opts:               options,
+		daemon:                              daemon,
+		isNodeHealthyFunc:                   isNodeHealthyFunc,
+		fetchTransactionMetadataFunc:        fetchTransactionMetadataFunc,
+		computeUnlockableAddressBalanceFunc: computeUnlockableAddressBalanceFunc,
+		submitTransactionPayloadFunc:        submitTransactionPayloadFunc,
+		apiProvider:                         apiProvider,
+		address:                             address,
+		addressSigner:                       addressSigner,
+		opts:                                options,
 
 		Events: &Events{
 			IssuedBlock: event.New1[iotago.BlockID](),
 			SoftError:   event.New1[error](),
 		},
 	}
+
+	faucet.collectUnlockableFaucetOutputsAndBalanceFunc = func() ([]UTXOBasicOutput, iotago.BaseToken, error) {
+		// get all outputs of the faucet
+		unspentOutputs, err := collectUnlockableFaucetOutputsFunc()
+		if err != nil {
+			return nil, 0, err
+		}
+
+		// get the total faucet balance
+		var balance iotago.BaseToken
+		for _, output := range unspentOutputs {
+			balance += output.Output.BaseTokenAmount()
+		}
+
+		// calculate total balance of all pending requests
+		var pendingRequestsBalance iotago.BaseToken
+		for _, pendingRequest := range faucet.queueMap {
+			pendingRequestsBalance += pendingRequest.Amount
+		}
+
+		// subtract the storage deposit for a simple basic output, so we can simplify our logic for remainder handling
+		minStorageDeposit, err := faucet.apiProvider.CurrentAPI().RentStructure().MinDeposit(EmptyBasicOutput)
+		if err != nil {
+			return nil, 0, err
+		}
+
+		if balance >= minStorageDeposit {
+			balance -= minStorageDeposit
+		} else {
+			balance = 0
+		}
+
+		if balance >= pendingRequestsBalance {
+			balance -= pendingRequestsBalance
+		} else {
+			balance = 0
+		}
+
+		return unspentOutputs, balance, nil
+	}
+
 	faucet.WrappedLogger = logger.NewWrappedLogger(options.logger)
 	faucet.init()
 
@@ -285,9 +347,12 @@ func (f *Faucet) init() {
 	f.queue = make(chan *queueItem, 5000)
 	f.queueMap = make(map[string]*queueItem)
 	f.flushQueue = make(chan struct{})
-	f.pendingTransactionsMap = make(map[string]*pendingTransaction)
-	f.lastBlockID = nil
-	f.lastRemainderOutput = nil
+	f.pendingTransaction = nil
+}
+
+// IsHealthy returns the health status of the faucet.
+func (f *Faucet) IsHealthy() bool {
+	return f.isNodeHealthyFunc()
 }
 
 // Info returns the used faucet address and remaining balance.
@@ -295,33 +360,12 @@ func (f *Faucet) Info() (*InfoResponse, error) {
 	protocolParams := f.apiProvider.CurrentAPI().ProtocolParameters()
 
 	return &InfoResponse{
-		IsHealthy: f.nodeHealthyFunc(),
+		IsHealthy: f.isNodeHealthyFunc(),
 		Address:   f.address.Bech32(protocolParams.Bech32HRP()),
 		Balance:   f.faucetBalance,
 		TokenName: f.opts.tokenName,
 		Bech32HRP: protocolParams.Bech32HRP(),
 	}, nil
-}
-
-func (f *Faucet) collectUnspentBasicOutputsWithoutConstraints(address iotago.Address) ([]UTXOOutput, iotago.BaseToken, error) {
-
-	outputs, err := f.collectOutputsFunc(address)
-	if err != nil {
-		return nil, 0, err
-	}
-
-	var balance iotago.BaseToken
-	for _, output := range outputs {
-		balance += output.Output.Amount
-	}
-
-	return outputs, balance, nil
-}
-
-func (f *Faucet) computeAddressBalance(address iotago.Address) (iotago.BaseToken, error) {
-	_, balance, err := f.collectUnspentBasicOutputsWithoutConstraints(address)
-
-	return balance, err
 }
 
 // Enqueue adds a new faucet request to the queue.
@@ -332,7 +376,7 @@ func (f *Faucet) Enqueue(bech32Addr string) (*EnqueueResponse, error) {
 		return nil, err
 	}
 
-	if !f.nodeHealthyFunc() {
+	if !f.isNodeHealthyFunc() {
 		//nolint:stylecheck,revive // this error message is shown to the user
 		return nil, ierrors.Wrap(echo.ErrInternalServerError, "Faucet node is not synchronized/healthy. Please try again later!")
 	}
@@ -346,7 +390,7 @@ func (f *Faucet) Enqueue(bech32Addr string) (*EnqueueResponse, error) {
 	}
 
 	amount := f.opts.amount
-	balance, err := f.computeAddressBalance(addr)
+	balance, err := f.computeUnlockableAddressBalanceFunc(addr)
 	if err == nil && balance >= f.opts.amount {
 		amount = f.opts.smallAmount
 
@@ -389,9 +433,14 @@ func (f *Faucet) FlushRequests() {
 	f.flushQueue <- struct{}{}
 }
 
+// logSoftError logs a soft error and triggers the event.
+func (f *Faucet) logSoftError(err error) {
+	f.LogWarn(err)
+	f.Events.SoftError.Trigger(err)
+}
+
 // parseBech32Address parses a bech32 address.
 func (f *Faucet) parseBech32Address(bech32Addr string) (iotago.Address, error) {
-
 	hrp, bech32Address, err := iotago.ParseBech32(bech32Addr)
 	if err != nil {
 		//nolint:stylecheck,revive // this error message is shown to the user
@@ -436,46 +485,108 @@ func (f *Faucet) readdRequestsWithoutLocking(batchedRequests []*queueItem) {
 	}
 }
 
-// addPendingTransactionWithoutLocking tracks a pending transaction.
+// setPendingTransactionWithoutLocking sets the pending transaction.
 // write lock must be acquired outside.
-func (f *Faucet) addPendingTransactionWithoutLocking(pending *pendingTransaction) {
-	f.pendingTransactionsMap[string(pending.BlockID[:])] = pending
+func (f *Faucet) setPendingTransactionWithoutLocking(pending *pendingTransaction) {
+	f.pendingTransaction = pending
 }
 
 // clearPendingTransactionWithoutLocking removes tracking of a pending transaction.
 // write lock must be acquired outside.
-func (f *Faucet) clearPendingTransactionWithoutLocking(blockID iotago.BlockID) {
-	delete(f.pendingTransactionsMap, string(blockID[:]))
+func (f *Faucet) clearPendingTransactionWithoutLocking() {
+	f.pendingTransaction = nil
 }
 
-// createBlock creates a new block and references the last faucet block.
-func (f *Faucet) createBlock(api iotago.API, txPayload iotago.Payload, tip ...iotago.BlockID) (*iotago.ProtocolBlock, error) {
+// collectRequests collects faucet requests until the maximum amount or a timeout is reached.
+// locking not required.
+func (f *Faucet) collectRequests(ctx context.Context) ([]*queueItem, error) {
+	batchedRequests := []*queueItem{}
 
-	tips := iotago.BlockIDs{}
-	if len(tip) > 0 {
-		// if a tip was passed, use that one
-		tips = append(tips, tip[0])
+CollectValues:
+	for len(batchedRequests) < f.opts.maxOutputCount {
+		select {
+		case <-ctx.Done():
+			// faucet was stopped
+			return nil, ErrOperationAborted
+
+		case <-time.After(f.opts.batchTimeout):
+			// timeout was reached => stop collecting requests
+			break CollectValues
+
+		case <-f.flushQueue:
+			// flush signal => stop collecting requests
+			for len(batchedRequests) < f.opts.maxOutputCount {
+				// collect all pending requests
+				select {
+				case request := <-f.queue:
+					batchedRequests = append(batchedRequests, request)
+
+				default:
+					// no pending requests
+					break CollectValues
+				}
+			}
+
+			break CollectValues
+
+		case request := <-f.queue:
+			batchedRequests = append(batchedRequests, request)
+		}
 	}
 
-	// TODO: do tipselection here and sign the full block
-	// we need to add an account in the snapshot generator and the issuer pubkey in the settings
-
-	return builder.NewBasicBlockBuilder(api).
-		StrongParents(tips).
-		Payload(txPayload).
-		Build()
+	return batchedRequests, nil
 }
 
-// buildTransactionPayload creates a signed transaction payload with all UTXO and batched requests.
-func (f *Faucet) buildTransactionPayload(api iotago.API, unspentOutputs []UTXOOutput, batchedRequests []*queueItem) (*iotago.Transaction, iotago.TransactionID, iotago.OutputIDs, *iotago.UTXOInput, iotago.BaseToken, error) {
+// processRequestsWithoutLocking processes all possible requests considering the maximum transaction size and the remaining funds of the faucet.
+// write lock must be acquired outside.
+func (f *Faucet) processRequestsWithoutLocking(collectedRequestsCounter int, balance iotago.BaseToken, batchedRequests []*queueItem) []*queueItem {
+	processedBatchedRequests := []*queueItem{}
+	unprocessedBatchedRequests := []*queueItem{}
+	nodeHealthy := f.isNodeHealthyFunc()
 
-	api.ProtocolParameters()
+	for i := range batchedRequests {
+		request := batchedRequests[i]
 
+		if !nodeHealthy {
+			// request can't be processed because the node is not healthy => re-add it to the queue
+			unprocessedBatchedRequests = append(unprocessedBatchedRequests, request)
+
+			continue
+		}
+
+		if collectedRequestsCounter >= f.opts.maxOutputCount-1 {
+			// request can't be processed in this transaction => re-add it to the queue
+			unprocessedBatchedRequests = append(unprocessedBatchedRequests, request)
+
+			continue
+		}
+
+		if balance < request.Amount {
+			// not enough funds to process this request => ignore the request
+			f.clearRequestWithoutLocking(request)
+
+			continue
+		}
+
+		// request can be processed in this transaction
+		balance -= request.Amount
+		collectedRequestsCounter++
+		processedBatchedRequests = append(processedBatchedRequests, request)
+	}
+
+	f.readdRequestsWithoutLocking(unprocessedBatchedRequests)
+
+	return processedBatchedRequests
+}
+
+// createTransactionBuilder creates a transaction builder with all inputs and batched requests.
+func (f *Faucet) createTransactionBuilder(api iotago.API, unspentOutputs []UTXOBasicOutput, batchedRequests []*queueItem) (*builder.TransactionBuilder, iotago.OutputIDs, int) {
 	txBuilder := builder.NewTransactionBuilder(api)
 	txBuilder.AddTaggedDataPayload(&iotago.TaggedData{Tag: f.opts.tagMessage, Data: nil})
 
-	outputCount := 0
+	var outputCount int
 	var remainderAmount int64
+	var remainderOutputIndex int
 
 	// collect all unspent output of the faucet address
 	consumedInputs := []iotago.OutputID{}
@@ -514,6 +625,7 @@ func (f *Faucet) buildTransactionPayload(api iotago.API, unspentOutputs []UTXOOu
 				&iotago.AddressUnlockCondition{Address: req.Address},
 			},
 		})
+		remainderOutputIndex++
 	}
 
 	if remainderAmount > 0 {
@@ -525,209 +637,142 @@ func (f *Faucet) buildTransactionPayload(api iotago.API, unspentOutputs []UTXOOu
 		})
 	}
 
-	txPayload, err := txBuilder.Build(f.addressSigner)
-	if err != nil {
-		return nil, iotago.TransactionID{}, nil, nil, 0, err
-	}
-
-	transactionID, err := txPayload.ID(api)
-	if err != nil {
-		return nil, iotago.TransactionID{}, nil, nil, 0, fmt.Errorf("can't compute the transaction ID, error: %w", err)
-	}
-
-	if remainderAmount == 0 {
-		// no remainder available
-		return txPayload, transactionID, consumedInputs, nil, 0, nil
-	}
-
-	remainderOutput := &iotago.UTXOInput{}
-	copy(remainderOutput.TransactionID[:], transactionID[:iotago.TransactionIDLength])
-
-	// search remainder address in the outputs
-	found := false
-	var outputIndex uint16
-	for _, output := range txPayload.Essence.Outputs {
-		basicOutput, ok := output.(*iotago.BasicOutput)
-		if !ok {
-			panic(fmt.Sprintf("invalid type: expected *iotago.BasicOutput, got %T", output))
-		}
-
-		addr := basicOutput.UnlockConditionSet().Address().Address
-
-		if f.address.Equal(addr) {
-			// found the remainder address in the outputs
-			found = true
-			remainderOutput.TransactionOutputIndex = outputIndex
-
-			break
-		}
-		outputIndex++
-	}
-
-	if !found {
-		return nil, iotago.TransactionID{}, nil, nil, 0, ierrors.New("can't find the faucet remainder output")
-	}
-
-	return txPayload, transactionID, consumedInputs, remainderOutput, iotago.BaseToken(remainderAmount), nil
+	return txBuilder, consumedInputs, remainderOutputIndex
 }
 
-// sendFaucetBlock creates a faucet transaction payload and remembers the last sent blockID and the lastRemainderOutput.
-func (f *Faucet) sendFaucetBlock(ctx context.Context, unspentOutputs []UTXOOutput, batchedRequests []*queueItem, tip ...iotago.BlockID) error {
+// sendFaucetBlock creates a faucet transaction payload and sends it to the block issuer.
+// write lock must be acquired outside.
+func (f *Faucet) sendFaucetBlock(ctx context.Context, unspentOutputs []UTXOBasicOutput, batchedRequests []*queueItem) error {
 	api := f.apiProvider.CurrentAPI()
 
-	txPayload, transactionID, consumedInputs, remainderIotaGoOutput, remainderAmount, err := f.buildTransactionPayload(api, unspentOutputs, batchedRequests)
+	txBuilder, consumedInputs, remainderOutputIndex := f.createTransactionBuilder(api, unspentOutputs, batchedRequests)
+
+	blockPayload, blockID, err := f.submitTransactionPayloadFunc(ctx, txBuilder, f.addressSigner, remainderOutputIndex, f.opts.powWorkerCount)
 	if err != nil {
-		return fmt.Errorf("build transaction payload failed, error: %w", err)
+		return ierrors.Errorf("submit faucet transaction payload failed, error: %w", err)
 	}
 
-	block, err := f.createBlock(api, txPayload, tip...)
-	if err != nil {
-		return fmt.Errorf("build faucet block failed, error: %w", err)
+	signedTx, ok := blockPayload.(*iotago.SignedTransaction)
+	if !ok {
+		return ierrors.Errorf("submitted faucet transaction payload is not a SignedTransaction, got instead: %T", blockPayload)
 	}
 
-	blockID, err := f.sendBlockFunc(ctx, block)
+	transactionID, err := signedTx.Transaction.ID()
 	if err != nil {
-		return fmt.Errorf("send faucet block failed, error: %w", err)
+		return ierrors.Errorf("send faucet block failed, error: %w", err)
 	}
 
-	f.Lock()
-	f.lastBlockID = &blockID
-	f.addPendingTransactionWithoutLocking(&pendingTransaction{
+	f.setPendingTransactionWithoutLocking(&pendingTransaction{
 		BlockID:        blockID,
 		QueuedItems:    batchedRequests,
 		ConsumedInputs: consumedInputs,
 		TransactionID:  transactionID,
 	})
 
-	if remainderIotaGoOutput != nil {
-		remainderIotaGoOutputID := remainderIotaGoOutput.OutputID()
-		output := &iotago.BasicOutput{
-			Amount: remainderAmount,
-			Conditions: iotago.BasicOutputUnlockConditions{
-				&iotago.AddressUnlockCondition{Address: f.address},
-			},
-		}
-		f.lastRemainderOutput = &UTXOOutput{
-			OutputID: remainderIotaGoOutputID,
-			Output:   output,
-		}
-	} else {
-		// no funds remaining => no remainder output
-		f.lastRemainderOutput = nil
-	}
-	f.Unlock()
-
 	f.Events.IssuedBlock.Trigger(blockID)
 
 	return nil
 }
 
-// logSoftError logs a soft error and triggers the event.
-func (f *Faucet) logSoftError(err error) {
-	f.LogWarn(err)
-	f.Events.SoftError.Trigger(err)
+// computeAndSetFaucetBalance computes the faucet balance minus the storage deposit for a single basic output.
+func (f *Faucet) computeAndSetFaucetBalance() error {
+	_, balance, err := f.collectUnlockableFaucetOutputsAndBalanceFunc()
+	if err != nil {
+		return err
+	}
+
+	f.Lock()
+	defer f.Unlock()
+
+	f.faucetBalance = balance
+
+	return nil
 }
 
-// collectRequests collects faucet requests until the maximum amount or a timeout is reached.
-// locking not required.
-func (f *Faucet) collectRequests(ctx context.Context) ([]*queueItem, error) {
+// collectRequestsAndSendFaucetBlock collects the requests and sends a faucet block.
+func (f *Faucet) collectRequestsAndSendFaucetBlock(ctx context.Context) error {
+	f.Lock()
+	defer f.Unlock()
 
-	batchedRequests := []*queueItem{}
-	collectedRequestsCounter := 0
-
-CollectValues:
-	for collectedRequestsCounter < f.opts.maxOutputCount {
+	// check if there is a pending transaction before issuing the next one
+	if f.pendingTransaction != nil {
 		select {
 		case <-ctx.Done():
 			// faucet was stopped
-			return nil, ErrOperationAborted
+			return nil
+		case <-time.After(time.Second):
+			// wait until the next loop
+			return nil
+		}
+	}
 
-		case <-time.After(f.opts.batchTimeout):
-			// timeout was reached => stop collecting requests
-			break CollectValues
+	// first collect requests
+	batchedRequests, err := f.collectRequests(ctx)
+	if err != nil {
+		if ierrors.Is(err, ErrOperationAborted) {
+			return nil
+		}
+		if IsCriticalError(err) != nil {
+			// error is a critical error
+			// => stop the faucet
+			return err
+		}
+		f.logSoftError(err)
 
-		case <-f.flushQueue:
-			// flush signal => stop collecting requests
-			for collectedRequestsCounter < f.opts.maxOutputCount {
-				// collect all pending requests
-				select {
-				case request := <-f.queue:
-					batchedRequests = append(batchedRequests, request)
-					collectedRequestsCounter++
+		return nil
+	}
 
-				default:
-					// no pending requests
-					break CollectValues
-				}
+	processRequests := func() ([]UTXOBasicOutput, []*queueItem, error) {
+		unspentOutputs, balance, err := f.collectUnlockableFaucetOutputsAndBalanceFunc()
+		if err != nil {
+			return nil, nil, err
+		}
+		f.faucetBalance = balance
+
+		if len(unspentOutputs) < 2 && len(batchedRequests) == 0 {
+			// no need to sweep or send funds
+			return nil, nil, ErrNothingToProcess
+		}
+
+		processableRequests := f.processRequestsWithoutLocking(len(unspentOutputs), balance, batchedRequests)
+
+		return unspentOutputs, processableRequests, nil
+	}
+
+	unspentOutputs, processableRequests, err := processRequests()
+	if err != nil {
+		if !ierrors.Is(err, ErrNothingToProcess) {
+			if IsCriticalError(err) != nil {
+				// error is a critical error
+				// => stop the faucet
+				return err
 			}
-
-			break CollectValues
-
-		case request := <-f.queue:
-			batchedRequests = append(batchedRequests, request)
-			collectedRequestsCounter++
+			f.logSoftError(err)
 		}
+
+		return nil
 	}
 
-	return batchedRequests, nil
-}
-
-// processRequestsWithoutLocking processes all possible requests considering the maximum transaction size and the remaining funds of the faucet.
-// write lock must be acquired outside.
-func (f *Faucet) processRequestsWithoutLocking(collectedRequestsCounter int, amount iotago.BaseToken, batchedRequests []*queueItem) []*queueItem {
-	processedBatchedRequests := []*queueItem{}
-	unprocessedBatchedRequests := []*queueItem{}
-	nodeHealthy := f.nodeHealthyFunc()
-
-	for i := range batchedRequests {
-		request := batchedRequests[i]
-
-		if !nodeHealthy {
-			// request can't be processed because the node is not healthy => re-add it to the queue
-			unprocessedBatchedRequests = append(unprocessedBatchedRequests, request)
-
-			continue
+	if err := f.sendFaucetBlock(ctx, unspentOutputs, processableRequests); err != nil {
+		if IsCriticalError(err) != nil {
+			// error is a critical error
+			// => stop the faucet
+			return err
 		}
+		f.readdRequestsWithoutLocking(processableRequests)
+		f.logSoftError(err)
 
-		if collectedRequestsCounter >= f.opts.maxOutputCount-1 {
-			// request can't be processed in this transaction => re-add it to the queue
-			unprocessedBatchedRequests = append(unprocessedBatchedRequests, request)
-
-			continue
-		}
-
-		if amount < request.Amount {
-			// not enough funds to process this request => ignore the request
-			f.clearRequestWithoutLocking(request)
-
-			continue
-		}
-
-		// request can be processed in this transaction
-		amount -= request.Amount
-		collectedRequestsCounter++
-		processedBatchedRequests = append(processedBatchedRequests, request)
 	}
 
-	f.readdRequestsWithoutLocking(unprocessedBatchedRequests)
-
-	return processedBatchedRequests
+	return nil
 }
 
 // RunFaucetLoop collects unspent outputs on the faucet address and batches the requests from the queue.
-func (f *Faucet) RunFaucetLoop(ctx context.Context, initDoneCallback func()) error {
+func (f *Faucet) RunFaucetLoop(ctx context.Context) error {
 
 	// set initial faucet balance
-	faucetBalance, err := f.computeAddressBalance(f.address)
-	if err != nil {
-		protocolParams := f.apiProvider.CurrentAPI().ProtocolParameters()
-
-		return CriticalError(fmt.Errorf("reading faucet address balance failed: %s, error: %w", f.address.Bech32(protocolParams.Bech32HRP()), err))
-	}
-	f.faucetBalance = faucetBalance
-
-	if initDoneCallback != nil {
-		initDoneCallback()
+	if err := f.computeAndSetFaucetBalance(); err != nil {
+		return CriticalError(ierrors.Errorf("reading faucet address balance failed: %s, error: %w", f.address.Bech32(f.apiProvider.CurrentAPI().ProtocolParameters().Bech32HRP()), err))
 	}
 
 	for {
@@ -737,102 +782,26 @@ func (f *Faucet) RunFaucetLoop(ctx context.Context, initDoneCallback func()) err
 			return nil
 
 		default:
-			// first collect requests
-			batchedRequests, err := f.collectRequests(ctx)
-			if err != nil {
-				if ierrors.Is(err, ErrOperationAborted) {
-					return nil
-				}
-				if IsCriticalError(err) != nil {
-					// error is a critical error
-					// => stop the faucet
-					return err
-				}
-				f.logSoftError(err)
-
-				continue
-			}
-
-			collectUnspentOutputsWithoutLocking := func() ([]UTXOOutput, iotago.BaseToken, error) {
-				if f.lastRemainderOutput != nil {
-					// the lastRemainderOutput is reused as input in the next transaction, even if it was not yet referenced by a milestone.
-					// this is done to increase the throughput of the faucet in high load situations.
-					// we can't collect unspent outputs, as long as the lastRemainderOutput was not confirmed,
-					// since it's creating transaction could also have consumed the same UTXOs.
-					return []UTXOOutput{*f.lastRemainderOutput}, f.lastRemainderOutput.Output.Amount, nil
-				}
-
-				return f.collectUnspentBasicOutputsWithoutConstraints(f.address)
-			}
-
-			processRequests := func() ([]UTXOOutput, []*queueItem, iotago.BlockIDs, error) {
-				// there must be a lock between collectUnspentOutputsWithoutLocking and "tipselection", otherwise the chaining may fail
-				f.Lock()
-				defer f.Unlock()
-
-				unspentOutputs, amount, err := collectUnspentOutputsWithoutLocking()
-				if err != nil {
-					return nil, nil, nil, err
-				}
-
-				if len(unspentOutputs) < 2 && len(batchedRequests) == 0 {
-					// no need to sweep or send funds
-					return nil, nil, nil, ErrNothingToProcess
-				}
-
-				// if a lastBlockID exists, we need to reference it to chain the transactions in the correct order for whiteflag.
-				// lastBlockID is reset by ApplyNewLedgerUpdate in case the last faucet block is not confirmed and below max depth.
-				var tips iotago.BlockIDs
-				if f.lastBlockID != nil {
-					tips = append(tips, *f.lastBlockID)
-				}
-
-				processableRequests := f.processRequestsWithoutLocking(len(unspentOutputs), amount, batchedRequests)
-
-				return unspentOutputs, processableRequests, tips, nil
-			}
-
-			unspentOutputs, processableRequests, tips, err := processRequests()
-			if err != nil {
-				if !ierrors.Is(err, ErrNothingToProcess) {
-					if IsCriticalError(err) != nil {
-						// error is a critical error
-						// => stop the faucet
-						return err
-					}
-					f.logSoftError(err)
-				}
-
-				continue
-			}
-
-			if err := f.sendFaucetBlock(ctx, unspentOutputs, processableRequests, tips...); err != nil {
-				if IsCriticalError(err) != nil {
-					// error is a critical error
-					// => stop the faucet
-					return err
-				}
-				f.readdRequestsWithoutLocking(processableRequests)
-				f.logSoftError(err)
-
-				continue
+			if err := f.collectRequestsAndSendFaucetBlock(ctx); err != nil {
+				return err
 			}
 		}
 	}
 }
 
 // ApplyNewLedgerUpdate applies a new ledger update to the faucet.
-// Pending transactions are checked for their current state and either removed, readded, or left pending.
-// If a conflict is found, all remaining pending transactions are readded to the queue.
-// no need to ReadLockLedger, because this function should be called from milestone confirmation event anyway.
+// If there is a pending transaction, it is checked if the transaction was confirmed or conflicting.
+// If a conflict is found, all requests are readded to the queue.
 func (f *Faucet) ApplyNewLedgerUpdate(createdOutputs iotago.OutputIDs, consumedOutputs iotago.OutputIDs) error {
 	f.Lock()
 	defer f.Unlock()
 
-	conflicting := false
+	if f.pendingTransaction == nil {
+		return nil
+	}
 
 	// create maps for faster lookup.
-	// outputs that are created and consumed in the same milestone exist in both maps.
+	// outputs that are created and consumed in the same update exist in both maps.
 	newSpentsMap := make(map[iotago.OutputID]struct{})
 	for _, spent := range consumedOutputs {
 		newSpentsMap[spent] = struct{}{}
@@ -843,155 +812,79 @@ func (f *Faucet) ApplyNewLedgerUpdate(createdOutputs iotago.OutputIDs, consumedO
 		newOutputsMap[output] = struct{}{}
 	}
 
-	if f.lastRemainderOutput != nil {
-		if _, created := newOutputsMap[f.lastRemainderOutput.OutputID]; created {
-			// the latest transaction got confirmed, reset the lastRemainderOutput
-			f.lastRemainderOutput = nil
-		}
-	}
+	pendingTx := f.pendingTransaction
 
-	// check if pending transactions were affected by the ledger update.
-	for _, pendingTx := range f.pendingTransactionsMap {
-
-		inputWasSpent := false
-		for _, consumedInput := range pendingTx.ConsumedInputs {
-			if _, spent := newSpentsMap[consumedInput]; spent {
-				inputWasSpent = true
-
-				break
-			}
-		}
-
-		if inputWasSpent {
-			// a referenced input of this transaction was spent, so the pending transaction is affected by this ledger update.
-			// => we need to check if the outputs were created, otherwise this is a conflicting transaction.
-
-			// we can easily check this by searching for output index 0.
-			// if this was created, the rest was created as well because transactions are atomic.
-			txOutputIndexZero := iotago.UTXOInput{
-				TransactionID:          pendingTx.TransactionID,
-				TransactionOutputIndex: 0,
-			}
-
-			if _, created := newOutputsMap[txOutputIndexZero.OutputID()]; !created {
-				// transaction was conflicting => readd the items to the queue and delete the pending transaction
-				conflicting = true
-				f.readdRequestsWithoutLocking(pendingTx.QueuedItems)
-				f.clearPendingTransactionWithoutLocking(pendingTx.BlockID)
-			} else {
-				// transaction was confirmed => delete the requests and the pending transaction
-				f.clearRequestsWithoutLocking(pendingTx.QueuedItems)
-				f.clearPendingTransactionWithoutLocking(pendingTx.BlockID)
-
-				if f.lastBlockID != nil && bytes.Equal(f.lastBlockID[:], pendingTx.BlockID[:]) {
-					// the latest block got confirmed, reset the lastBlockID
-					f.lastBlockID = nil
-				}
-			}
-		}
-	}
-
-	checkPendingBlockMetadata := func(pendingTx *pendingTransaction) {
-		blockID := pendingTx.BlockID
-
-		metadata, err := f.blockMetadataFunc(blockID)
-		if err != nil {
-			// an error occurred => re-add the items to the queue and delete the pending transaction
-			conflicting = true
-			f.readdRequestsWithoutLocking(pendingTx.QueuedItems)
-			f.clearPendingTransactionWithoutLocking(blockID)
-
-			return
-		}
-		if metadata == nil {
-			// block unknown => re-add the items to the queue and delete the pending transaction
-			conflicting = true
-			f.readdRequestsWithoutLocking(pendingTx.QueuedItems)
-			f.clearPendingTransactionWithoutLocking(blockID)
-
-			return
-		}
-
-		if metadata.IsReferenced {
-			if metadata.IsConflicting {
-				// transaction was conflicting => re-add the items to the queue and delete the pending transaction
-				conflicting = true
-				f.readdRequestsWithoutLocking(pendingTx.QueuedItems)
-				f.clearPendingTransactionWithoutLocking(blockID)
-
-				return
-			}
-
-			// transaction was confirmed => delete the requests and the pending transaction
-			f.clearRequestsWithoutLocking(pendingTx.QueuedItems)
-			f.clearPendingTransactionWithoutLocking(blockID)
-
-			return
-		}
-
-		if metadata.ShouldReattach {
-			// below max depth => re-add the items to the queue and delete the pending transaction
-			conflicting = true
-			f.readdRequestsWithoutLocking(pendingTx.QueuedItems)
-			f.clearPendingTransactionWithoutLocking(blockID)
-		}
-	}
-
-	// check all remaining pending transactions
-	for _, pendingTx := range f.pendingTransactionsMap {
-		checkPendingBlockMetadata(pendingTx)
-	}
-
-	// check if the lastBlockID is below max depth
-	if !conflicting && f.lastBlockID != nil {
-		metadata, err := f.blockMetadataFunc(*f.lastBlockID)
-		if err != nil {
-			// an error occurred => mark the chain as conflicting
-			conflicting = true
-		}
-		if metadata == nil {
-			// block unknown => mark the chain as conflicting
-			conflicting = true
-		} else if metadata.ShouldReattach {
-			// block was below max depth => mark the chain as conflicting
-			conflicting = true
-		}
-	}
-
-	if conflicting {
-		// there was a conflict in the chain
-		// => reset the lastBlockID and lastRemainderOutput to collect outputs and reissue all pending transactions
-		f.lastBlockID = nil
-		f.lastRemainderOutput = nil
-
-		for _, pendingTx := range f.pendingTransactionsMap {
-			f.readdRequestsWithoutLocking(pendingTx.QueuedItems)
-			f.clearPendingTransactionWithoutLocking(pendingTx.BlockID)
-		}
-	}
-
-	// calculate total balance of all pending requests
-	var pendingRequestsBalance iotago.BaseToken
-	for _, pendingRequest := range f.queueMap {
-		pendingRequestsBalance += pendingRequest.Amount
-	}
-
-	// recalculate the current faucet balance
-	// no need to lock since we are in the milestone confirmation anyway
-	faucetBalance, err := f.computeAddressBalance(f.address)
-	if err != nil {
-		protocolParams := f.apiProvider.CurrentAPI().ProtocolParameters()
-
-		return CriticalError(fmt.Errorf("reading faucet address balance failed: %s, error: %w", f.address.Bech32(protocolParams.Bech32HRP()), err))
-	}
-
-	if faucetBalance < pendingRequestsBalance {
-		f.faucetBalance = 0
+	clearPendingRequestsWithoutLocking := func() error {
+		f.clearRequestsWithoutLocking(pendingTx.QueuedItems)
+		f.clearPendingTransactionWithoutLocking()
 
 		return nil
 	}
 
-	f.faucetBalance = faucetBalance - pendingRequestsBalance
+	readdPendingRequestsWithoutLocking := func() error {
+		f.readdRequestsWithoutLocking(pendingTx.QueuedItems)
+		f.clearPendingTransactionWithoutLocking()
+
+		return nil
+	}
+
+	// check if the pending transaction was confirmed.
+	// we can easily check this by searching for output index 0.
+	txOutputIndexZero := iotago.UTXOInput{
+		TransactionID:          pendingTx.TransactionID,
+		TransactionOutputIndex: 0,
+	}
+	txOutputIDIndexZero := txOutputIndexZero.OutputID()
+
+	// if this output was created, the rest of the outputs were created as well because transactions are atomic.
+	if _, created := newOutputsMap[txOutputIDIndexZero]; created {
+		// transaction was confirmed
+		// => delete the requests and the pending transaction
+		return clearPendingRequestsWithoutLocking()
+	}
+
+	// check if the inputs of the pending transaction were affected by the ledger update.
+	for _, consumedInput := range pendingTx.ConsumedInputs {
+		if _, spent := newSpentsMap[consumedInput]; spent {
+			// a referenced input of the pending transaction was spent, so it is affected by this ledger update.
+			// since the output index 0 of the pending transaction was not created,
+			// it means that the transaction was conflicting with another one.
+			// => readd the items to the queue and delete the pending transaction
+			return readdPendingRequestsWithoutLocking()
+		}
+	}
+
+	metadata, err := f.fetchTransactionMetadataFunc(pendingTx.BlockID)
+	if err != nil {
+		// an error occurred => re-add the items to the queue and delete the pending transaction
+		return readdPendingRequestsWithoutLocking()
+	}
+
+	if metadata == nil {
+		// block unknown, this can only happen if the block was orphaned.
+		// => re-add the items to the queue and delete the pending transaction
+		return readdPendingRequestsWithoutLocking()
+	}
+
+	switch metadata.State {
+	case inx.BlockMetadata_TRANSACTION_STATE_NO_TRANSACTION:
+		return CriticalError(ierrors.Errorf("transaction metadata of the requested block is no transaction, blockID: %s, txID: %s", pendingTx.BlockID, pendingTx.TransactionID))
+
+	case inx.BlockMetadata_TRANSACTION_STATE_PENDING:
+		// transaction is pending
+
+	case inx.BlockMetadata_TRANSACTION_STATE_ACCEPTED, inx.BlockMetadata_TRANSACTION_STATE_CONFIRMED, inx.BlockMetadata_TRANSACTION_STATE_FINALIZED:
+		// transaction was confirmed
+		// => delete the requests and the pending transaction
+		return clearPendingRequestsWithoutLocking()
+
+	case inx.BlockMetadata_TRANSACTION_STATE_FAILED:
+		// transaction failed
+		// => re-add the items to the queue and delete the pending transaction
+		f.logSoftError(ierrors.Errorf("transaction failed, blockID: %s, txID: %s, reason: %d", pendingTx.BlockID, pendingTx.TransactionID, metadata.FailureReason))
+
+		return readdPendingRequestsWithoutLocking()
+	}
 
 	return nil
 }
