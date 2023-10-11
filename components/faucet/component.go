@@ -71,15 +71,26 @@ func provide(c *dig.Container) error {
 	}
 
 	if err := c.Provide(func(deps blockIssuerClientDeps) (nodeclient.BlockIssuerClient, error) {
+		Component.LogInfo("Initializing INX node client...")
 		nodeClient, err := deps.NodeBridge.INXNodeClient()
 		if err != nil {
 			return nil, err
 		}
+		Component.LogInfo("Initializing INX node client...done!")
 
 		ctx, cancel := context.WithTimeout(Component.Daemon().ContextStopped(), 5*time.Second)
 		defer cancel()
 
-		return nodeClient.BlockIssuer(ctx)
+		Component.LogInfo("Initializing blockissuer...")
+
+		blockissuer, err := nodeClient.BlockIssuer(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		Component.LogInfo("Initializing blockissuer...done!")
+
+		return blockissuer, nil
 	}); err != nil {
 		Component.LogPanic(err)
 	}
@@ -114,6 +125,8 @@ func provide(c *dig.Container) error {
 			}, nil
 		}
 
+		Component.LogInfo("Initializing indexer...")
+
 		ctxIndexer, cancelIndexer := context.WithTimeout(Component.Daemon().ContextStopped(), indexerPluginAvailableTimeout)
 		defer cancelIndexer()
 
@@ -121,6 +134,8 @@ func provide(c *dig.Container) error {
 		if err != nil {
 			return nil, err
 		}
+
+		Component.LogInfo("Initializing indexer... done!")
 
 		collectUnlockableFaucetOutputs := func() ([]faucet.UTXOBasicOutput, error) {
 			ctxRequest, cancelRequest := context.WithTimeout(Component.Daemon().ContextStopped(), inxRequestTimeout)
@@ -252,7 +267,9 @@ func provide(c *dig.Container) error {
 			return signedTx, blockCreatedResponse.BlockID, nil
 		}
 
-		return faucet.New(
+		Component.LogInfo("Initializing faucet...")
+
+		faucet := faucet.New(
 			Component.Daemon(),
 			deps.NodeBridge.IsNodeHealthy,
 			fetchTransactionMetadata,
@@ -271,7 +288,11 @@ func provide(c *dig.Container) error {
 			faucet.WithTagMessage(ParamsFaucet.TagMessage),
 			faucet.WithBatchTimeout(ParamsFaucet.BatchTimeout),
 			faucet.WithPoWWorkerCount(ParamsFaucet.PoW.WorkerCount),
-		), nil
+		)
+
+		Component.LogInfo("Initializing faucet... done!")
+
+		return faucet, nil
 	}); err != nil {
 		Component.LogPanic(err)
 	}
