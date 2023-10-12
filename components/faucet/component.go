@@ -155,7 +155,7 @@ func provide(c *dig.Container) error {
 					HasStorageDepositReturn: &falseCondition,
 				},
 				IndexerNativeTokenParams: apimodels.IndexerNativeTokenParams{
-					HasNativeTokens: &falseCondition,
+					HasNativeToken: &falseCondition,
 				},
 			}
 
@@ -346,6 +346,7 @@ func run() error {
 
 	go func() {
 		Component.LogInfof("You can now access the faucet website using: http://%s", ParamsFaucet.BindAddress)
+		Component.LogInfof("The deposit address of the faucet is %s", deps.Faucet.Address().Bech32(deps.NodeBridge.APIProvider().CurrentAPI().ProtocolParameters().Bech32HRP()))
 
 		if err := e.Start(ParamsFaucet.BindAddress); err != nil && !ierrors.Is(err, http.ErrServerClosed) {
 			Component.LogWarnf("Stopped faucet website server due to an error (%s)", err)

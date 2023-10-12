@@ -355,6 +355,11 @@ func (f *Faucet) IsHealthy() bool {
 	return f.isNodeHealthyFunc()
 }
 
+// Address returns the deposit address of the faucet.
+func (f *Faucet) Address() iotago.Address {
+	return f.address
+}
+
 // Info returns the used faucet address and remaining balance.
 func (f *Faucet) Info() (*InfoResponse, error) {
 	protocolParams := f.apiProvider.CurrentAPI().ProtocolParameters()
