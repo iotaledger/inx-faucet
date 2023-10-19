@@ -12,7 +12,7 @@ require (
 	github.com/iotaledger/inx/go v1.0.0-rc.2.0.20231011154428-257141868dad
 	github.com/iotaledger/iota.go/v4 v4.0.0-20231011161154-7004432004e1
 	github.com/labstack/echo/v4 v4.11.1
-	go.uber.org/dig v1.17.0
+	go.uber.org/dig v1.17.1
 	golang.org/x/time v0.3.0
 	google.golang.org/grpc v1.58.3
 )
