@@ -144,7 +144,7 @@ func provide(c *dig.Container) error {
 			// simple outputs are basic outputs without timelocks, expiration, native tokens, storage deposit return unlocks conditions.
 			falseCondition := false
 			query := &apimodels.BasicOutputsQuery{
-				AddressBech32: faucetAddressRestricted.Bech32(deps.NodeBridge.APIProvider().CurrentAPI().ProtocolParameters().Bech32HRP()),
+				AddressBech32: faucetAddressRestricted.Bech32(deps.NodeBridge.APIProvider().CommittedAPI().ProtocolParameters().Bech32HRP()),
 				IndexerTimelockParams: apimodels.IndexerTimelockParams{
 					HasTimelock: &falseCondition,
 				},
@@ -200,7 +200,7 @@ func provide(c *dig.Container) error {
 			// collect all possible outputs that are owned by that address and evaluate later if they are unlockable.
 			query := &apimodels.OutputsQuery{
 				IndexerUnlockableByAddressParams: apimodels.IndexerUnlockableByAddressParams{
-					UnlockableByAddressBech32: address.Bech32(deps.NodeBridge.APIProvider().CurrentAPI().ProtocolParameters().Bech32HRP()),
+					UnlockableByAddressBech32: address.Bech32(deps.NodeBridge.APIProvider().CommittedAPI().ProtocolParameters().Bech32HRP()),
 				},
 			}
 
@@ -232,8 +232,8 @@ func provide(c *dig.Container) error {
 
 					//nolint:godox
 					// TODO: what are the correct bounds here?
-					maxFutureBoundedSlotIndex := lastAcceptedBlockSlot + deps.NodeBridge.APIProvider().CurrentAPI().ProtocolParameters().MinCommittableAge()
-					minPastBoundedSlotIndex := lastAcceptedBlockSlot + deps.NodeBridge.APIProvider().CurrentAPI().ProtocolParameters().MaxCommittableAge()
+					maxFutureBoundedSlotIndex := lastAcceptedBlockSlot + deps.NodeBridge.APIProvider().CommittedAPI().ProtocolParameters().MinCommittableAge()
+					minPastBoundedSlotIndex := lastAcceptedBlockSlot + deps.NodeBridge.APIProvider().CommittedAPI().ProtocolParameters().MaxCommittableAge()
 
 					actualIdentToUnlock, err := output.UnlockConditionSet().CheckExpirationCondition(maxFutureBoundedSlotIndex, minPastBoundedSlotIndex)
 					if err != nil {
@@ -346,7 +346,7 @@ func run() error {
 
 	go func() {
 		Component.LogInfof("You can now access the faucet website using: http://%s", ParamsFaucet.BindAddress)
-		Component.LogInfof("The deposit address of the faucet is %s", deps.Faucet.Address().Bech32(deps.NodeBridge.APIProvider().CurrentAPI().ProtocolParameters().Bech32HRP()))
+		Component.LogInfof("The deposit address of the faucet is %s", deps.Faucet.Address().Bech32(deps.NodeBridge.APIProvider().CommittedAPI().ProtocolParameters().Bech32HRP()))
 
 		if err := e.Start(ParamsFaucet.BindAddress); err != nil && !ierrors.Is(err, http.ErrServerClosed) {
 			Component.LogWarnf("Stopped faucet website server due to an error (%s)", err)
