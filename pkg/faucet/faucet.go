@@ -316,7 +316,7 @@ func New(
 		}
 
 		// subtract the storage deposit for a simple basic output, so we can simplify our logic for remainder handling
-		minStorageDeposit, err := faucet.apiProvider.CurrentAPI().RentStructure().MinDeposit(EmptyBasicOutput)
+		minStorageDeposit, err := faucet.apiProvider.CommittedAPI().StorageScoreStructure().MinDeposit(EmptyBasicOutput)
 		if err != nil {
 			return nil, 0, err
 		}
@@ -362,7 +362,7 @@ func (f *Faucet) Address() iotago.Address {
 
 // Info returns the used faucet address and remaining balance.
 func (f *Faucet) Info() (*InfoResponse, error) {
-	protocolParams := f.apiProvider.CurrentAPI().ProtocolParameters()
+	protocolParams := f.apiProvider.CommittedAPI().ProtocolParameters()
 
 	return &InfoResponse{
 		IsHealthy: f.isNodeHealthyFunc(),
@@ -452,7 +452,7 @@ func (f *Faucet) parseBech32Address(bech32Addr string) (iotago.Address, error) {
 		return nil, ierrors.Wrap(httpserver.ErrInvalidParameter, "Invalid bech32 address provided!")
 	}
 
-	protocolParams := f.apiProvider.CurrentAPI().ProtocolParameters()
+	protocolParams := f.apiProvider.CommittedAPI().ProtocolParameters()
 	if hrp != protocolParams.Bech32HRP() {
 		//nolint:stylecheck,revive // this error message is shown to the user
 		return nil, ierrors.Wrapf(httpserver.ErrInvalidParameter, "Invalid bech32 address provided! Address does not start with \"%s\".", protocolParams.Bech32HRP())
@@ -648,7 +648,7 @@ func (f *Faucet) createTransactionBuilder(api iotago.API, unspentOutputs []UTXOB
 // sendFaucetBlock creates a faucet transaction payload and sends it to the block issuer.
 // write lock must be acquired outside.
 func (f *Faucet) sendFaucetBlock(ctx context.Context, unspentOutputs []UTXOBasicOutput, batchedRequests []*queueItem) error {
-	api := f.apiProvider.CurrentAPI()
+	api := f.apiProvider.CommittedAPI()
 
 	txBuilder, consumedInputs, remainderOutputIndex := f.createTransactionBuilder(api, unspentOutputs, batchedRequests)
 
@@ -777,7 +777,7 @@ func (f *Faucet) RunFaucetLoop(ctx context.Context) error {
 
 	// set initial faucet balance
 	if err := f.computeAndSetFaucetBalance(); err != nil {
-		return CriticalError(ierrors.Errorf("reading faucet address balance failed: %s, error: %w", f.address.Bech32(f.apiProvider.CurrentAPI().ProtocolParameters().Bech32HRP()), err))
+		return CriticalError(ierrors.Errorf("reading faucet address balance failed: %s, error: %w", f.address.Bech32(f.apiProvider.CommittedAPI().ProtocolParameters().Bech32HRP()), err))
 	}
 
 	for {
