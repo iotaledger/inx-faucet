@@ -120,8 +120,8 @@ func provide(c *dig.Container) error {
 			}
 
 			return &faucet.TransactionMetadata{
-				State:         metadata.GetTxState(),
-				FailureReason: metadata.GetTxFailureReason(),
+				State:         metadata.GetTransactionState(),
+				FailureReason: metadata.GetTransactionFailureReason(),
 			}, nil
 		}
 
