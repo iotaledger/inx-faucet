@@ -699,8 +699,12 @@ func (f *Faucet) collectRequestsAndSendFaucetBlock(ctx context.Context) error {
 	f.Lock()
 	defer f.Unlock()
 
+	f.LogDebug("entering collectRequestsAndSendFaucetBlock...")
+
 	// check if there is a pending transaction before issuing the next one
 	if f.pendingTransaction != nil {
+		f.LogDebugf("skip processing of new requests because a pending tx was found, blockID: %s, txID: %s", f.pendingTransaction.BlockID, f.pendingTransaction.TransactionID)
+
 		select {
 		case <-ctx.Done():
 			// faucet was stopped
@@ -726,6 +730,8 @@ func (f *Faucet) collectRequestsAndSendFaucetBlock(ctx context.Context) error {
 
 		return nil
 	}
+
+	f.LogDebugf("collected %d requests", len(batchedRequests))
 
 	processRequests := func() ([]UTXOBasicOutput, []*queueItem, error) {
 		unspentOutputs, balance, err := f.collectUnlockableFaucetOutputsAndBalanceFunc()
@@ -758,6 +764,8 @@ func (f *Faucet) collectRequestsAndSendFaucetBlock(ctx context.Context) error {
 		return nil
 	}
 
+	f.LogDebugf("determined %d available unspent outputs and %d processable requests", len(unspentOutputs), len(processableRequests))
+
 	if err := f.sendFaucetBlock(ctx, unspentOutputs, processableRequests); err != nil {
 		if IsCriticalError(err) != nil {
 			// error is a critical error
@@ -766,7 +774,6 @@ func (f *Faucet) collectRequestsAndSendFaucetBlock(ctx context.Context) error {
 		}
 		f.readdRequestsWithoutLocking(processableRequests)
 		f.logSoftError(err)
-
 	}
 
 	return nil

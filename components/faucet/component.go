@@ -18,6 +18,7 @@ import (
 	"github.com/iotaledger/hive.go/app/shutdown"
 	"github.com/iotaledger/hive.go/crypto"
 	"github.com/iotaledger/hive.go/ierrors"
+	"github.com/iotaledger/hive.go/lo"
 	"github.com/iotaledger/inx-app/pkg/httpserver"
 	"github.com/iotaledger/inx-app/pkg/nodebridge"
 	"github.com/iotaledger/inx-faucet/pkg/daemon"
@@ -259,10 +260,13 @@ func provide(c *dig.Container) error {
 		}
 
 		submitTransactionPayload := func(ctx context.Context, builder *builder.TransactionBuilder, signer iotago.AddressSigner, storedManaOutputIndex int, numPoWWorkers ...int) (iotago.BlockPayload, iotago.BlockID, error) {
+			Component.LogDebug("sending transaction payload...")
 			signedTx, blockCreatedResponse, err := deps.BlockIssuerClient.SendPayloadWithTransactionBuilder(ctx, builder, signer, storedManaOutputIndex, numPoWWorkers...)
 			if err != nil {
 				return nil, iotago.EmptyBlockID, err
 			}
+			//nolint:forcetypeassert // we can safely assume that this is a SignedTransaction
+			Component.LogDebugf("sent transaction payload, blockID: %s, txID: %s", blockCreatedResponse.BlockID, lo.Return1(signedTx.(*iotago.SignedTransaction).ID()))
 
 			return signedTx, blockCreatedResponse.BlockID, nil
 		}
