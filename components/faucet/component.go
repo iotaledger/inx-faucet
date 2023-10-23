@@ -17,7 +17,9 @@ import (
 	"github.com/iotaledger/hive.go/app"
 	"github.com/iotaledger/hive.go/app/shutdown"
 	"github.com/iotaledger/hive.go/crypto"
+	"github.com/iotaledger/hive.go/ds/types"
 	"github.com/iotaledger/hive.go/ierrors"
+	"github.com/iotaledger/hive.go/lo"
 	"github.com/iotaledger/inx-app/pkg/httpserver"
 	"github.com/iotaledger/inx-app/pkg/nodebridge"
 	"github.com/iotaledger/inx-faucet/pkg/daemon"
@@ -120,8 +122,8 @@ func provide(c *dig.Container) error {
 			}
 
 			return &faucet.TransactionMetadata{
-				State:         metadata.GetTxState(),
-				FailureReason: metadata.GetTxFailureReason(),
+				State:         metadata.GetTransactionState(),
+				FailureReason: metadata.GetTransactionFailureReason(),
 			}, nil
 		}
 
@@ -141,22 +143,10 @@ func provide(c *dig.Container) error {
 			ctxRequest, cancelRequest := context.WithTimeout(Component.Daemon().ContextStopped(), inxRequestTimeout)
 			defer cancelRequest()
 
-			// simple outputs are basic outputs without timelocks, expiration, native tokens, storage deposit return unlocks conditions.
-			falseCondition := false
+			// the restricted address only returns simple outputs, which are basic outputs without timelocks,
+			// expiration, native tokens, storage deposit return unlocks conditions.
 			query := &apimodels.BasicOutputsQuery{
 				AddressBech32: faucetAddressRestricted.Bech32(deps.NodeBridge.APIProvider().CommittedAPI().ProtocolParameters().Bech32HRP()),
-				IndexerTimelockParams: apimodels.IndexerTimelockParams{
-					HasTimelock: &falseCondition,
-				},
-				IndexerExpirationParams: apimodels.IndexerExpirationParams{
-					HasExpiration: &falseCondition,
-				},
-				IndexerStorageDepositParams: apimodels.IndexerStorageDepositParams{
-					HasStorageDepositReturn: &falseCondition,
-				},
-				IndexerNativeTokenParams: apimodels.IndexerNativeTokenParams{
-					HasNativeToken: &falseCondition,
-				},
 			}
 
 			result, err := indexer.Outputs(ctxRequest, query)
@@ -170,6 +160,7 @@ func provide(c *dig.Container) error {
 				if err != nil {
 					return nil, err
 				}
+
 				outputIDs := result.Response.Items.MustOutputIDs()
 
 				for i := range outputs {
@@ -259,10 +250,13 @@ func provide(c *dig.Container) error {
 		}
 
 		submitTransactionPayload := func(ctx context.Context, builder *builder.TransactionBuilder, signer iotago.AddressSigner, storedManaOutputIndex int, numPoWWorkers ...int) (iotago.BlockPayload, iotago.BlockID, error) {
+			Component.LogDebug("sending transaction payload...")
 			signedTx, blockCreatedResponse, err := deps.BlockIssuerClient.SendPayloadWithTransactionBuilder(ctx, builder, signer, storedManaOutputIndex, numPoWWorkers...)
 			if err != nil {
 				return nil, iotago.EmptyBlockID, err
 			}
+			//nolint:forcetypeassert // we can safely assume that this is a SignedTransaction
+			Component.LogDebugf("sent transaction payload, blockID: %s, txID: %s", blockCreatedResponse.BlockID, lo.Return1(signedTx.(*iotago.SignedTransaction).ID()))
 
 			return signedTx, blockCreatedResponse.BlockID, nil
 		}
@@ -302,28 +296,30 @@ func provide(c *dig.Container) error {
 
 func run() error {
 
-	// create a background worker that handles the ledger updates
-	if err := Component.Daemon().BackgroundWorker("Faucet[LedgerUpdates]", func(ctx context.Context) {
-		if err := deps.NodeBridge.ListenToLedgerUpdates(ctx, 0, 0, func(update *nodebridge.LedgerUpdate) error {
-			createdOutputs := iotago.OutputIDs{}
-			for _, output := range update.Created {
-				createdOutputs = append(createdOutputs, output.GetOutputId().Unwrap())
+	// create a background worker that handles the accepted transactions
+	if err := Component.Daemon().BackgroundWorker("Faucet[ListenToAcceptedTransactions]", func(ctx context.Context) {
+		if err := deps.NodeBridge.ListenToAcceptedTransactions(ctx, func(tx *nodebridge.AcceptedTransaction) error {
+			// create maps for faster lookup.
+			// outputs that are created and consumed in the same update exist in both maps.
+			createdOutputs := make(map[iotago.OutputID]struct{})
+			for _, output := range tx.Created {
+				createdOutputs[output.UnwrapOutputID()] = types.Void
 			}
-			consumedOutputs := iotago.OutputIDs{}
-			for _, spent := range update.Consumed {
-				consumedOutputs = append(consumedOutputs, spent.GetOutput().GetOutputId().Unwrap())
+			consumedOutputs := make(map[iotago.OutputID]struct{})
+			for _, spent := range tx.Consumed {
+				consumedOutputs[spent.GetOutput().UnwrapOutputID()] = types.Void
 			}
 
-			err := deps.Faucet.ApplyNewLedgerUpdate(createdOutputs, consumedOutputs)
+			err := deps.Faucet.ApplyAcceptedTransaction(createdOutputs, consumedOutputs)
 			if err != nil {
-				deps.ShutdownHandler.SelfShutdown(fmt.Sprintf("faucet plugin hit a critical error while applying new ledger update: %s", err.Error()), true)
+				deps.ShutdownHandler.SelfShutdown(fmt.Sprintf("faucet plugin hit a critical error while applying new accepted transaction: %s", err.Error()), true)
 			}
 
 			return err
 		}); err != nil {
-			deps.ShutdownHandler.SelfShutdown(fmt.Sprintf("Listening to LedgerUpdates failed, error: %s", err), false)
+			deps.ShutdownHandler.SelfShutdown(fmt.Sprintf("Listening to AcceptedTransactions failed, error: %s", err), false)
 		}
-	}, daemon.PriorityStopFaucetLedgerUpdates); err != nil {
+	}, daemon.PriorityStopFaucetAcceptedTransactions); err != nil {
 		Component.LogPanicf("failed to start worker: %s", err)
 	}
 
