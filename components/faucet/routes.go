@@ -40,7 +40,7 @@ func enforceMaxOneDotPerURL(next echo.HandlerFunc) echo.HandlerFunc {
 }
 
 func addFaucetOutputToQueue(c echo.Context) (*faucet.EnqueueResponse, error) {
-	request := &faucetEnqueueRequest{}
+	request := &faucet.EnqueueRequest{}
 	if err := c.Bind(request); err != nil {
 		return nil, ierrors.Wrapf(httpserver.ErrInvalidParameter, "Invalid Request! Error: %s", err)
 	}

@@ -105,6 +105,12 @@ type InfoResponse struct {
 	Bech32HRP iotago.NetworkPrefix `json:"bech32Hrp"`
 }
 
+// EnqueueRequest defines the request for a POST RouteFaucetEnqueue REST API call.
+type EnqueueRequest struct {
+	// The bech32 address.
+	Address string `json:"address"`
+}
+
 // EnqueueResponse defines the response of a POST RouteFaucetEnqueue REST API call.
 type EnqueueResponse struct {
 	// The bech32 address.
@@ -127,7 +133,8 @@ type Faucet struct {
 	// used to fetch metadata of a transaction from the node.
 	fetchTransactionMetadataFunc FetchTransactionMetadataFunc
 	// used to collect the unlockable outputs and the balance of the faucet.
-	collectUnlockableFaucetOutputsAndBalanceFunc CollectUnlockableFaucetOutputsAndBalanceFunc
+	// write lock must be acquired outside.
+	collectUnlockableFaucetOutputsAndBalanceFuncWithoutLocking CollectUnlockableFaucetOutputsAndBalanceFunc
 	// used to compute the unlockable balance of an address.
 	computeUnlockableAddressBalanceFunc ComputeUnlockableAddressBalanceFunc
 	// used to create a signed transaction payload and send it to a block issuer.
@@ -297,7 +304,8 @@ func New(
 		},
 	}
 
-	faucet.collectUnlockableFaucetOutputsAndBalanceFunc = func() ([]UTXOBasicOutput, iotago.BaseToken, error) {
+	// write lock must be acquired outside.
+	faucet.collectUnlockableFaucetOutputsAndBalanceFuncWithoutLocking = func() ([]UTXOBasicOutput, iotago.BaseToken, error) {
 		// get all outputs of the faucet
 		unspentOutputs, err := collectUnlockableFaucetOutputsFunc()
 		if err != nil {
@@ -698,13 +706,13 @@ func (f *Faucet) sendFaucetBlock(ctx context.Context, unspentOutputs []UTXOBasic
 
 // computeAndSetFaucetBalance computes the faucet balance minus the storage deposit for a single basic output.
 func (f *Faucet) computeAndSetFaucetBalance() error {
-	_, balance, err := f.collectUnlockableFaucetOutputsAndBalanceFunc()
+	f.Lock()
+	defer f.Unlock()
+
+	_, balance, err := f.collectUnlockableFaucetOutputsAndBalanceFuncWithoutLocking()
 	if err != nil {
 		return err
 	}
-
-	f.Lock()
-	defer f.Unlock()
 
 	f.faucetBalance = balance
 
@@ -751,7 +759,7 @@ func (f *Faucet) collectRequestsAndSendFaucetBlock(ctx context.Context) error {
 	f.LogDebugf("collected %d requests", len(batchedRequests))
 
 	processRequests := func() ([]UTXOBasicOutput, []*queueItem, error) {
-		unspentOutputs, balance, err := f.collectUnlockableFaucetOutputsAndBalanceFunc()
+		unspentOutputs, balance, err := f.collectUnlockableFaucetOutputsAndBalanceFuncWithoutLocking()
 		if err != nil {
 			return nil, nil, err
 		}

@@ -143,22 +143,10 @@ func provide(c *dig.Container) error {
 			ctxRequest, cancelRequest := context.WithTimeout(Component.Daemon().ContextStopped(), inxRequestTimeout)
 			defer cancelRequest()
 
-			// simple outputs are basic outputs without timelocks, expiration, native tokens, storage deposit return unlocks conditions.
-			falseCondition := false
+			// the restricted address only returns simple outputs, which are basic outputs without timelocks,
+			// expiration, native tokens, storage deposit return unlocks conditions.
 			query := &apimodels.BasicOutputsQuery{
 				AddressBech32: faucetAddressRestricted.Bech32(deps.NodeBridge.APIProvider().CommittedAPI().ProtocolParameters().Bech32HRP()),
-				IndexerTimelockParams: apimodels.IndexerTimelockParams{
-					HasTimelock: &falseCondition,
-				},
-				IndexerExpirationParams: apimodels.IndexerExpirationParams{
-					HasExpiration: &falseCondition,
-				},
-				IndexerStorageDepositParams: apimodels.IndexerStorageDepositParams{
-					HasStorageDepositReturn: &falseCondition,
-				},
-				IndexerNativeTokenParams: apimodels.IndexerNativeTokenParams{
-					HasNativeToken: &falseCondition,
-				},
 			}
 
 			result, err := indexer.Outputs(ctxRequest, query)
@@ -172,6 +160,7 @@ func provide(c *dig.Container) error {
 				if err != nil {
 					return nil, err
 				}
+
 				outputIDs := result.Response.Items.MustOutputIDs()
 
 				for i := range outputs {
