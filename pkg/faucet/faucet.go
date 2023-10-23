@@ -12,6 +12,7 @@ import (
 	"github.com/iotaledger/hive.go/logger"
 	"github.com/iotaledger/hive.go/runtime/event"
 	"github.com/iotaledger/hive.go/runtime/syncutils"
+	"github.com/iotaledger/hive.go/runtime/timeutil"
 	"github.com/iotaledger/inx-app/pkg/httpserver"
 	inx "github.com/iotaledger/inx/go"
 	iotago "github.com/iotaledger/iota.go/v4"
@@ -502,6 +503,22 @@ func (f *Faucet) clearPendingTransactionWithoutLocking() {
 	f.pendingTransaction = nil
 }
 
+// clearPendingRequestsWithoutLocking clears the old requests from the map
+// and removes tracking of a pending transaction.
+// write lock must be acquired outside.
+func (f *Faucet) clearPendingRequestsWithoutLocking() {
+	f.clearRequestsWithoutLocking(f.pendingTransaction.QueuedItems)
+	f.clearPendingTransactionWithoutLocking()
+}
+
+// readdPendingRequestsWithoutLocking adds old requests back to the queue
+// and removes tracking of a pending transaction.
+// write lock must be acquired outside.
+func (f *Faucet) readdPendingRequestsWithoutLocking() {
+	f.readdRequestsWithoutLocking(f.pendingTransaction.QueuedItems)
+	f.clearPendingTransactionWithoutLocking()
+}
+
 // collectRequests collects faucet requests until the maximum amount or a timeout is reached.
 // locking not required.
 func (f *Faucet) collectRequests(ctx context.Context) ([]*queueItem, error) {
@@ -787,11 +804,18 @@ func (f *Faucet) RunFaucetLoop(ctx context.Context) error {
 		return CriticalError(ierrors.Errorf("reading faucet address balance failed: %s, error: %w", f.address.Bech32(f.apiProvider.CommittedAPI().ProtocolParameters().Bech32HRP()), err))
 	}
 
+	checkPendingTxTicker := time.NewTicker(5 * time.Second)
+	defer timeutil.CleanupTicker(checkPendingTxTicker)
+
 	for {
 		select {
 		case <-ctx.Done():
 			// faucet was stopped
 			return nil
+
+		case <-checkPendingTxTicker.C:
+			// check periodically for pending transaction state
+			f.checkPendingTransactionState()
 
 		default:
 			if err := f.collectRequestsAndSendFaucetBlock(ctx); err != nil {
@@ -801,42 +825,69 @@ func (f *Faucet) RunFaucetLoop(ctx context.Context) error {
 	}
 }
 
-// ApplyNewLedgerUpdate applies a new ledger update to the faucet.
-// If there is a pending transaction, it is checked if the transaction was confirmed or conflicting.
-// If a conflict is found, all requests are readded to the queue.
-func (f *Faucet) ApplyNewLedgerUpdate(createdOutputs iotago.OutputIDs, consumedOutputs iotago.OutputIDs) error {
+// checkPendingTransactionState checks if a pending transaction was orphaned or another error occurred.
+// If a problem is found, all requests are readded to the queue.
+func (f *Faucet) checkPendingTransactionState() {
 	f.Lock()
 	defer f.Unlock()
 
-	if f.pendingTransaction == nil {
-		return nil
+	pendingTx := f.pendingTransaction
+
+	if pendingTx == nil {
+		// no transaction pending so there is no need for additional checks
+		return
 	}
 
-	// create maps for faster lookup.
-	// outputs that are created and consumed in the same update exist in both maps.
-	newSpentsMap := make(map[iotago.OutputID]struct{})
-	for _, spent := range consumedOutputs {
-		newSpentsMap[spent] = struct{}{}
+	metadata, err := f.fetchTransactionMetadataFunc(pendingTx.BlockID)
+	if err != nil {
+		// an error occurred => re-add the items to the queue and delete the pending transaction
+		f.readdPendingRequestsWithoutLocking()
+
+		return
 	}
 
-	newOutputsMap := make(map[iotago.OutputID]struct{})
-	for _, output := range createdOutputs {
-		newOutputsMap[output] = struct{}{}
+	if metadata == nil {
+		// metadata unknown, this can only happen if the block was orphaned.
+		// => re-add the items to the queue and delete the pending transaction
+		f.readdPendingRequestsWithoutLocking()
+
+		return
 	}
+
+	switch metadata.State {
+	case inx.BlockMetadata_TRANSACTION_STATE_NO_TRANSACTION:
+		// transaction is not known, so the block must have been filtered
+		// => re-add the items to the queue and delete the pending transaction
+		f.logSoftError(ierrors.Errorf("transaction metadata of the requested block is no transaction, blockID: %s, txID: %s", pendingTx.BlockID, pendingTx.TransactionID))
+		f.readdPendingRequestsWithoutLocking()
+
+	case inx.BlockMetadata_TRANSACTION_STATE_PENDING:
+		// transaction is still pending
+
+	case inx.BlockMetadata_TRANSACTION_STATE_ACCEPTED, inx.BlockMetadata_TRANSACTION_STATE_CONFIRMED, inx.BlockMetadata_TRANSACTION_STATE_FINALIZED:
+		// transaction was confirmed
+		// => delete the requests and the pending transaction
+		f.clearPendingRequestsWithoutLocking()
+
+	case inx.BlockMetadata_TRANSACTION_STATE_FAILED:
+		// transaction failed
+		// => re-add the items to the queue and delete the pending transaction
+		f.logSoftError(ierrors.Errorf("transaction failed, blockID: %s, txID: %s, reason: %d", pendingTx.BlockID, pendingTx.TransactionID, metadata.FailureReason))
+		f.readdPendingRequestsWithoutLocking()
+	}
+}
+
+// ApplyAcceptedTransaction applies an accepted transaction to the faucet.
+// If there is a pending transaction, it is checked if the transaction was confirmed or conflicting.
+// If a conflict is found, all requests are readded to the queue.
+func (f *Faucet) ApplyAcceptedTransaction(createdOutputs map[iotago.OutputID]struct{}, consumedOutputs map[iotago.OutputID]struct{}) error {
+	f.Lock()
+	defer f.Unlock()
 
 	pendingTx := f.pendingTransaction
 
-	clearPendingRequestsWithoutLocking := func() error {
-		f.clearRequestsWithoutLocking(pendingTx.QueuedItems)
-		f.clearPendingTransactionWithoutLocking()
-
-		return nil
-	}
-
-	readdPendingRequestsWithoutLocking := func() error {
-		f.readdRequestsWithoutLocking(pendingTx.QueuedItems)
-		f.clearPendingTransactionWithoutLocking()
-
+	if pendingTx == nil {
+		// no transaction pending so there is no need for additional checks
 		return nil
 	}
 
@@ -849,53 +900,25 @@ func (f *Faucet) ApplyNewLedgerUpdate(createdOutputs iotago.OutputIDs, consumedO
 	txOutputIDIndexZero := txOutputIndexZero.OutputID()
 
 	// if this output was created, the rest of the outputs were created as well because transactions are atomic.
-	if _, created := newOutputsMap[txOutputIDIndexZero]; created {
+	if _, created := createdOutputs[txOutputIDIndexZero]; created {
 		// transaction was confirmed
 		// => delete the requests and the pending transaction
-		return clearPendingRequestsWithoutLocking()
+		f.clearPendingRequestsWithoutLocking()
+
+		return nil
 	}
 
 	// check if the inputs of the pending transaction were affected by the ledger update.
 	for _, consumedInput := range pendingTx.ConsumedInputs {
-		if _, spent := newSpentsMap[consumedInput]; spent {
+		if _, spent := consumedOutputs[consumedInput]; spent {
 			// a referenced input of the pending transaction was spent, so it is affected by this ledger update.
 			// since the output index 0 of the pending transaction was not created,
 			// it means that the transaction was conflicting with another one.
 			// => readd the items to the queue and delete the pending transaction
-			return readdPendingRequestsWithoutLocking()
+			f.readdPendingRequestsWithoutLocking()
+
+			return nil
 		}
-	}
-
-	metadata, err := f.fetchTransactionMetadataFunc(pendingTx.BlockID)
-	if err != nil {
-		// an error occurred => re-add the items to the queue and delete the pending transaction
-		return readdPendingRequestsWithoutLocking()
-	}
-
-	if metadata == nil {
-		// block unknown, this can only happen if the block was orphaned.
-		// => re-add the items to the queue and delete the pending transaction
-		return readdPendingRequestsWithoutLocking()
-	}
-
-	switch metadata.State {
-	case inx.BlockMetadata_TRANSACTION_STATE_NO_TRANSACTION:
-		return CriticalError(ierrors.Errorf("transaction metadata of the requested block is no transaction, blockID: %s, txID: %s", pendingTx.BlockID, pendingTx.TransactionID))
-
-	case inx.BlockMetadata_TRANSACTION_STATE_PENDING:
-		// transaction is pending
-
-	case inx.BlockMetadata_TRANSACTION_STATE_ACCEPTED, inx.BlockMetadata_TRANSACTION_STATE_CONFIRMED, inx.BlockMetadata_TRANSACTION_STATE_FINALIZED:
-		// transaction was confirmed
-		// => delete the requests and the pending transaction
-		return clearPendingRequestsWithoutLocking()
-
-	case inx.BlockMetadata_TRANSACTION_STATE_FAILED:
-		// transaction failed
-		// => re-add the items to the queue and delete the pending transaction
-		f.logSoftError(ierrors.Errorf("transaction failed, blockID: %s, txID: %s, reason: %d", pendingTx.BlockID, pendingTx.TransactionID, metadata.FailureReason))
-
-		return readdPendingRequestsWithoutLocking()
 	}
 
 	return nil

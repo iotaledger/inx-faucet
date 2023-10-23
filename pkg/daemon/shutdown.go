@@ -2,6 +2,6 @@ package daemon
 
 const (
 	PriorityDisconnectINX = iota // no dependencies
-	PriorityStopFaucetLedgerUpdates
+	PriorityStopFaucetAcceptedTransactions
 	PriorityStopFaucet
 )

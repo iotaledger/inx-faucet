@@ -17,6 +17,7 @@ import (
 	"github.com/iotaledger/hive.go/app"
 	"github.com/iotaledger/hive.go/app/shutdown"
 	"github.com/iotaledger/hive.go/crypto"
+	"github.com/iotaledger/hive.go/ds/types"
 	"github.com/iotaledger/hive.go/ierrors"
 	"github.com/iotaledger/hive.go/lo"
 	"github.com/iotaledger/inx-app/pkg/httpserver"
@@ -306,28 +307,30 @@ func provide(c *dig.Container) error {
 
 func run() error {
 
-	// create a background worker that handles the ledger updates
-	if err := Component.Daemon().BackgroundWorker("Faucet[LedgerUpdates]", func(ctx context.Context) {
-		if err := deps.NodeBridge.ListenToLedgerUpdates(ctx, 0, 0, func(update *nodebridge.LedgerUpdate) error {
-			createdOutputs := iotago.OutputIDs{}
-			for _, output := range update.Created {
-				createdOutputs = append(createdOutputs, output.GetOutputId().Unwrap())
+	// create a background worker that handles the accepted transactions
+	if err := Component.Daemon().BackgroundWorker("Faucet[ListenToAcceptedTransactions]", func(ctx context.Context) {
+		if err := deps.NodeBridge.ListenToAcceptedTransactions(ctx, func(tx *nodebridge.AcceptedTransaction) error {
+			// create maps for faster lookup.
+			// outputs that are created and consumed in the same update exist in both maps.
+			createdOutputs := make(map[iotago.OutputID]struct{})
+			for _, output := range tx.Created {
+				createdOutputs[output.UnwrapOutputID()] = types.Void
 			}
-			consumedOutputs := iotago.OutputIDs{}
-			for _, spent := range update.Consumed {
-				consumedOutputs = append(consumedOutputs, spent.GetOutput().GetOutputId().Unwrap())
+			consumedOutputs := make(map[iotago.OutputID]struct{})
+			for _, spent := range tx.Consumed {
+				consumedOutputs[spent.GetOutput().UnwrapOutputID()] = types.Void
 			}
 
-			err := deps.Faucet.ApplyNewLedgerUpdate(createdOutputs, consumedOutputs)
+			err := deps.Faucet.ApplyAcceptedTransaction(createdOutputs, consumedOutputs)
 			if err != nil {
-				deps.ShutdownHandler.SelfShutdown(fmt.Sprintf("faucet plugin hit a critical error while applying new ledger update: %s", err.Error()), true)
+				deps.ShutdownHandler.SelfShutdown(fmt.Sprintf("faucet plugin hit a critical error while applying new accepted transaction: %s", err.Error()), true)
 			}
 
 			return err
 		}); err != nil {
-			deps.ShutdownHandler.SelfShutdown(fmt.Sprintf("Listening to LedgerUpdates failed, error: %s", err), false)
+			deps.ShutdownHandler.SelfShutdown(fmt.Sprintf("Listening to AcceptedTransactions failed, error: %s", err), false)
 		}
-	}, daemon.PriorityStopFaucetLedgerUpdates); err != nil {
+	}, daemon.PriorityStopFaucetAcceptedTransactions); err != nil {
 		Component.LogPanicf("failed to start worker: %s", err)
 	}
 
