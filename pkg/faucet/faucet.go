@@ -828,6 +828,8 @@ func (f *Faucet) RunFaucetLoop(ctx context.Context) error {
 // checkPendingTransactionState checks if a pending transaction was orphaned or another error occurred.
 // If a problem is found, all requests are readded to the queue.
 func (f *Faucet) checkPendingTransactionState() {
+	f.LogDebug("entering checkPendingTransactionState...")
+
 	f.Lock()
 	defer f.Unlock()
 
@@ -835,12 +837,15 @@ func (f *Faucet) checkPendingTransactionState() {
 
 	if pendingTx == nil {
 		// no transaction pending so there is no need for additional checks
+		f.LogDebug("checkPendingTransactionState: no pending transaction found")
+
 		return
 	}
 
 	metadata, err := f.fetchTransactionMetadataFunc(pendingTx.BlockID)
 	if err != nil {
 		// an error occurred => re-add the items to the queue and delete the pending transaction
+		f.logSoftError(ierrors.Errorf("failed to fetch metadata of the pending transaction, blockID: %s, txID: %s", pendingTx.BlockID, pendingTx.TransactionID))
 		f.readdPendingRequestsWithoutLocking()
 
 		return
@@ -849,6 +854,7 @@ func (f *Faucet) checkPendingTransactionState() {
 	if metadata == nil {
 		// metadata unknown, this can only happen if the block was orphaned.
 		// => re-add the items to the queue and delete the pending transaction
+		f.logSoftError(ierrors.Errorf("metadata of the pending transaction is unknown, blockID: %s, txID: %s", pendingTx.BlockID, pendingTx.TransactionID))
 		f.readdPendingRequestsWithoutLocking()
 
 		return
@@ -858,15 +864,17 @@ func (f *Faucet) checkPendingTransactionState() {
 	case inx.BlockMetadata_TRANSACTION_STATE_NO_TRANSACTION:
 		// transaction is not known, so the block must have been filtered
 		// => re-add the items to the queue and delete the pending transaction
-		f.logSoftError(ierrors.Errorf("transaction metadata of the requested block is no transaction, blockID: %s, txID: %s", pendingTx.BlockID, pendingTx.TransactionID))
+		f.logSoftError(ierrors.Errorf("metadata of the pending transaction is no transaction, blockID: %s, txID: %s", pendingTx.BlockID, pendingTx.TransactionID))
 		f.readdPendingRequestsWithoutLocking()
 
 	case inx.BlockMetadata_TRANSACTION_STATE_PENDING:
 		// transaction is still pending
+		f.LogDebugf("checkPendingTransactionState: transaction still pending, blockID: %s, txID: %s", pendingTx.BlockID, pendingTx.TransactionID)
 
 	case inx.BlockMetadata_TRANSACTION_STATE_ACCEPTED, inx.BlockMetadata_TRANSACTION_STATE_CONFIRMED, inx.BlockMetadata_TRANSACTION_STATE_FINALIZED:
 		// transaction was confirmed
 		// => delete the requests and the pending transaction
+		f.LogDebugf("checkPendingTransactionState: transaction successful, blockID: %s, txID: %s", pendingTx.BlockID, pendingTx.TransactionID)
 		f.clearPendingRequestsWithoutLocking()
 
 	case inx.BlockMetadata_TRANSACTION_STATE_FAILED:
@@ -881,6 +889,8 @@ func (f *Faucet) checkPendingTransactionState() {
 // If there is a pending transaction, it is checked if the transaction was confirmed or conflicting.
 // If a conflict is found, all requests are readded to the queue.
 func (f *Faucet) ApplyAcceptedTransaction(createdOutputs map[iotago.OutputID]struct{}, consumedOutputs map[iotago.OutputID]struct{}) error {
+	f.LogDebug("entering ApplyAcceptedTransaction...")
+
 	f.Lock()
 	defer f.Unlock()
 
@@ -888,6 +898,8 @@ func (f *Faucet) ApplyAcceptedTransaction(createdOutputs map[iotago.OutputID]str
 
 	if pendingTx == nil {
 		// no transaction pending so there is no need for additional checks
+		f.LogDebug("ApplyAcceptedTransaction: no pending transaction found")
+
 		return nil
 	}
 
@@ -903,6 +915,7 @@ func (f *Faucet) ApplyAcceptedTransaction(createdOutputs map[iotago.OutputID]str
 	if _, created := createdOutputs[txOutputIDIndexZero]; created {
 		// transaction was confirmed
 		// => delete the requests and the pending transaction
+		f.LogDebug("ApplyAcceptedTransaction: transaction successful")
 		f.clearPendingRequestsWithoutLocking()
 
 		return nil
@@ -915,6 +928,7 @@ func (f *Faucet) ApplyAcceptedTransaction(createdOutputs map[iotago.OutputID]str
 			// since the output index 0 of the pending transaction was not created,
 			// it means that the transaction was conflicting with another one.
 			// => readd the items to the queue and delete the pending transaction
+			f.LogDebug("ApplyAcceptedTransaction: transaction conflicting, inputs consumed in another transaction")
 			f.readdPendingRequestsWithoutLocking()
 
 			return nil
