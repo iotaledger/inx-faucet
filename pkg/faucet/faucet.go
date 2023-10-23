@@ -785,6 +785,8 @@ func (f *Faucet) collectRequestsAndSendFaucetBlock(ctx context.Context) error {
 			}
 			f.logSoftError(err)
 		}
+		// readd the all collected requests back to the queue
+		f.readdRequestsWithoutLocking(batchedRequests)
 
 		return nil
 	}
@@ -797,6 +799,7 @@ func (f *Faucet) collectRequestsAndSendFaucetBlock(ctx context.Context) error {
 			// => stop the faucet
 			return err
 		}
+		// readd the non-processed requests back to the queue
 		f.readdRequestsWithoutLocking(processableRequests)
 		f.logSoftError(err)
 	}
