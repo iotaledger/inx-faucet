@@ -278,7 +278,6 @@ func provide(c *dig.Container) error {
 			faucet.WithAmount(iotago.BaseToken(ParamsFaucet.Amount)),
 			faucet.WithSmallAmount(iotago.BaseToken(ParamsFaucet.SmallAmount)),
 			faucet.WithMaxAddressBalance(iotago.BaseToken(ParamsFaucet.MaxAddressBalance)),
-			faucet.WithMaxOutputCount(ParamsFaucet.MaxOutputCount),
 			faucet.WithTagMessage(ParamsFaucet.TagMessage),
 			faucet.WithBatchTimeout(ParamsFaucet.BatchTimeout),
 			faucet.WithPoWWorkerCount(ParamsFaucet.PoW.WorkerCount),

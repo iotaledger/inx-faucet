@@ -134,8 +134,7 @@ Example:
 | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- | ------- | ---------------- |
 | amount                         | The amount of funds the requester receives                                                                                   | uint    | 1000000000       |
 | smallAmount                    | The amount of funds the requester receives if the target address has more funds than the faucet amount and less than maximum | uint    | 100000000        |
-| maxAddressBalance              | The maximum allowed amount of funds on the target address                                                                    | uint    | 2000000000       |
-| maxOutputCount                 | The maximum output count per faucet message                                                                                  | int     | 128              |
+| maxAddressBalance              | The maximum allowed amount of funds on the target address                                                                    | uint    | 5000000000       |
 | tagMessage                     | The faucet transaction tag payload                                                                                           | string  | "FAUCET"         |
 | batchTimeout                   | The maximum duration for collecting faucet batches                                                                           | string  | "2s"             |
 | bindAddress                    | The bind address on which the faucet website can be accessed from                                                            | string  | "localhost:8091" |
@@ -165,8 +164,7 @@ Example:
     "faucet": {
       "amount": 1000000000,
       "smallAmount": 100000000,
-      "maxAddressBalance": 2000000000,
-      "maxOutputCount": 128,
+      "maxAddressBalance": 5000000000,
       "tagMessage": "FAUCET",
       "batchTimeout": "2s",
       "bindAddress": "localhost:8091",

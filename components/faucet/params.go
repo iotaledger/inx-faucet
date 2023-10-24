@@ -4,14 +4,12 @@ import (
 	"time"
 
 	"github.com/iotaledger/hive.go/app"
-	iotago "github.com/iotaledger/iota.go/v4"
 )
 
 type ParametersFaucet struct {
 	Amount            uint64        `default:"1000000000" usage:"the amount of funds the requester receives"`
 	SmallAmount       uint64        `default:"100000000" usage:"the amount of funds the requester receives if the target address has more funds than the faucet amount and less than maximum"`
-	MaxAddressBalance uint64        `default:"2000000000" usage:"the maximum allowed amount of funds on the target address"`
-	MaxOutputCount    int           `usage:"the maximum output count per faucet message"`
+	MaxAddressBalance uint64        `default:"5000000000" usage:"the maximum allowed amount of funds on the target address"`
 	TagMessage        string        `default:"FAUCET" usage:"the faucet transaction tag payload"`
 	BatchTimeout      time.Duration `default:"2s" usage:"the maximum duration for collecting faucet batches"`
 	BindAddress       string        `default:"localhost:8091" usage:"the bind address on which the faucet website can be accessed from"`
@@ -29,9 +27,7 @@ type ParametersFaucet struct {
 	DebugRequestLoggerEnabled bool `default:"false" usage:"whether the debug logging for requests should be enabled"`
 }
 
-var ParamsFaucet = &ParametersFaucet{
-	MaxOutputCount: iotago.MaxOutputsCount,
-}
+var ParamsFaucet = &ParametersFaucet{}
 
 var params = &app.ComponentParams{
 	Params: map[string]any{

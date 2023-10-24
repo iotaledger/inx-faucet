@@ -170,7 +170,6 @@ var defaultOptions = []Option{
 	WithAmount(10_000_000),            // 10 IOTA
 	WithSmallAmount(1_000_000),        // 1 IOTA
 	WithMaxAddressBalance(20_000_000), // 20 IOTA
-	WithMaxOutputCount(iotago.MaxOutputsCount),
 	WithTagMessage("FAUCET"),
 	WithBatchTimeout(2 * time.Second),
 }
@@ -183,7 +182,6 @@ type Options struct {
 	amount            iotago.BaseToken
 	smallAmount       iotago.BaseToken
 	maxAddressBalance iotago.BaseToken
-	maxOutputCount    int
 	tagMessage        []byte
 	batchTimeout      time.Duration
 	powWorkerCount    int
@@ -230,19 +228,6 @@ func WithSmallAmount(smallAmount iotago.BaseToken) Option {
 func WithMaxAddressBalance(maxAddressBalance iotago.BaseToken) Option {
 	return func(opts *Options) {
 		opts.maxAddressBalance = maxAddressBalance
-	}
-}
-
-// WithMaxOutputCount defines the maximum output count per faucet block.
-func WithMaxOutputCount(maxOutputCount int) Option {
-	return func(opts *Options) {
-		if maxOutputCount > iotago.MaxOutputsCount {
-			maxOutputCount = iotago.MaxOutputsCount
-		}
-		if maxOutputCount < 2 {
-			maxOutputCount = 2
-		}
-		opts.maxOutputCount = maxOutputCount
 	}
 }
 
@@ -533,7 +518,7 @@ func (f *Faucet) collectRequests(ctx context.Context) ([]*queueItem, error) {
 	batchedRequests := []*queueItem{}
 
 CollectValues:
-	for len(batchedRequests) < f.opts.maxOutputCount {
+	for len(batchedRequests) < iotago.MaxOutputsCount {
 		select {
 		case <-ctx.Done():
 			// faucet was stopped
@@ -545,7 +530,7 @@ CollectValues:
 
 		case <-f.flushQueue:
 			// flush signal => stop collecting requests
-			for len(batchedRequests) < f.opts.maxOutputCount {
+			for len(batchedRequests) < iotago.MaxOutputsCount {
 				// collect all pending requests
 				select {
 				case request := <-f.queue:
@@ -584,7 +569,7 @@ func (f *Faucet) processRequestsWithoutLocking(collectedRequestsCounter int, bal
 			continue
 		}
 
-		if collectedRequestsCounter >= f.opts.maxOutputCount-1 {
+		if collectedRequestsCounter >= iotago.MaxOutputsCount-1 {
 			// request can't be processed in this transaction => re-add it to the queue
 			unprocessedBatchedRequests = append(unprocessedBatchedRequests, request)
 
@@ -631,7 +616,7 @@ func (f *Faucet) createTransactionBuilder(api iotago.API, unspentOutputs []UTXOB
 	for _, req := range batchedRequests {
 		outputCount++
 
-		if outputCount >= f.opts.maxOutputCount-1 {
+		if outputCount >= iotago.MaxOutputsCount-1 {
 			// do not collect further requests
 			// the last slot is for the remainder
 			break
