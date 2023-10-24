@@ -249,6 +249,10 @@ func provide(c *dig.Container) error {
 			return unlockableBalance, nil
 		}
 
+		getLatestSlot := func() iotago.SlotIndex {
+			return iotago.SlotIndex(deps.NodeBridge.NodeStatus().LastAcceptedBlockSlot)
+		}
+
 		submitTransactionPayload := func(ctx context.Context, builder *builder.TransactionBuilder, signer iotago.AddressSigner, storedManaOutputIndex int, numPoWWorkers ...int) (iotago.BlockPayload, iotago.BlockID, error) {
 			Component.LogDebug("sending transaction payload...")
 			signedTx, blockCreatedResponse, err := deps.BlockIssuerClient.SendPayloadWithTransactionBuilder(ctx, builder, signer, storedManaOutputIndex, numPoWWorkers...)
@@ -269,16 +273,18 @@ func provide(c *dig.Container) error {
 			fetchTransactionMetadata,
 			collectUnlockableFaucetOutputs,
 			computeUnlockableAddressBalance,
+			getLatestSlot,
 			submitTransactionPayload,
 			deps.NodeBridge.APIProvider(),
 			faucetAddressRestricted,
 			faucetSigner,
 			faucet.WithLogger(Component.Logger()),
 			faucet.WithTokenName(deps.NodeBridge.NodeConfig.BaseToken.Name),
-			faucet.WithAmount(iotago.BaseToken(ParamsFaucet.Amount)),
-			faucet.WithSmallAmount(iotago.BaseToken(ParamsFaucet.SmallAmount)),
-			faucet.WithMaxAddressBalance(iotago.BaseToken(ParamsFaucet.MaxAddressBalance)),
-			faucet.WithMaxOutputCount(ParamsFaucet.MaxOutputCount),
+			faucet.WithBaseTokenAmount(iotago.BaseToken(ParamsFaucet.BaseTokenAmount)),
+			faucet.WithBaseTokenAmountSmall(iotago.BaseToken(ParamsFaucet.BaseTokenAmountSmall)),
+			faucet.WithBaseTokenAmountMaxTarget(iotago.BaseToken(ParamsFaucet.BaseTokenAmountMaxTarget)),
+			faucet.WithManaAmount(iotago.Mana(ParamsFaucet.ManaAmount)),
+			faucet.WithManaAmountMinFaucet(iotago.Mana(ParamsFaucet.ManaAmountMinFaucet)),
 			faucet.WithTagMessage(ParamsFaucet.TagMessage),
 			faucet.WithBatchTimeout(ParamsFaucet.BatchTimeout),
 			faucet.WithPoWWorkerCount(ParamsFaucet.PoW.WorkerCount),
