@@ -792,6 +792,12 @@ func (f *Faucet) collectRequestsAndSendFaucetBlock(ctx context.Context) error {
 	}
 
 	f.LogDebugf("determined %d available unspent outputs and %d processable requests", len(unspentOutputs), len(processableRequests))
+	for i, unspentOutput := range unspentOutputs {
+		f.LogDebugf("	unspent output %d, outputID: %s, amount: %d, mana: %d", i, unspentOutput.OutputID.ToHex(), unspentOutput.Output.Amount, unspentOutput.Output.Mana)
+	}
+	for i, processableRequest := range processableRequests {
+		f.LogDebugf("	processable request %d, address: %s, amount: %d", i, processableRequest.Bech32, processableRequest.Amount)
+	}
 
 	if err := f.sendFaucetBlock(ctx, unspentOutputs, processableRequests); err != nil {
 		if IsCriticalError(err) != nil {
