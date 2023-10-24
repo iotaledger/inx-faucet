@@ -175,6 +175,8 @@ var defaultOptions = []Option{
 	WithBaseTokenAmount(10_000_000),          // 10 IOTA
 	WithBaseTokenAmountSmall(1_000_000),      // 1 IOTA
 	WithBaseTokenAmountMaxTarget(20_000_000), // 20 IOTA
+	WithManaAmount(1000),
+	WithManaAmountMinFaucet(1000000),
 	WithTagMessage("FAUCET"),
 	WithBatchTimeout(2 * time.Second),
 }
