@@ -8,6 +8,7 @@ import (
 	"github.com/labstack/echo/v4"
 
 	"github.com/iotaledger/hive.go/app/daemon"
+	"github.com/iotaledger/hive.go/core/safemath"
 	"github.com/iotaledger/hive.go/ierrors"
 	"github.com/iotaledger/hive.go/logger"
 	"github.com/iotaledger/hive.go/runtime/event"
@@ -59,6 +60,8 @@ type (
 	CollectUnlockableFaucetOutputsAndBalanceFunc func() ([]UTXOBasicOutput, iotago.BaseToken, error)
 	// ComputeUnlockableAddressBalanceFunc is a function to compute the unlockable balance of an address.
 	ComputeUnlockableAddressBalanceFunc func(address iotago.Address) (iotago.BaseToken, error)
+	// GetLatestSlotFunc is a function to get the latest known slot in the network.
+	GetLatestSlotFunc func() iotago.SlotIndex
 	// SubmitTransactionPayloadFunc is a function which creates a signed transaction payload and sends it to a block issuer.
 	SubmitTransactionPayloadFunc func(ctx context.Context, builder *builder.TransactionBuilder, signer iotago.AddressSigner, storedManaOutputIndex int, numPoWWorkers ...int) (iotago.BlockPayload, iotago.BlockID, error)
 )
@@ -78,9 +81,9 @@ type Events struct {
 
 // queueItem is an item for the faucet requests queue.
 type queueItem struct {
-	Bech32  string
-	Amount  iotago.BaseToken
-	Address iotago.Address
+	Bech32          string
+	BaseTokenAmount iotago.BaseToken
+	Address         iotago.Address
 }
 
 // pendingTransaction holds info about a sent transaction that is pending.
@@ -137,6 +140,8 @@ type Faucet struct {
 	collectUnlockableFaucetOutputsAndBalanceFuncWithoutLocking CollectUnlockableFaucetOutputsAndBalanceFunc
 	// used to compute the unlockable balance of an address.
 	computeUnlockableAddressBalanceFunc ComputeUnlockableAddressBalanceFunc
+	// used to get the latest known slot in the network.
+	getLatestSlotFunc GetLatestSlotFunc
 	// used to create a signed transaction payload and send it to a block issuer.
 	submitTransactionPayloadFunc SubmitTransactionPayloadFunc
 
@@ -167,9 +172,9 @@ type Faucet struct {
 // the default options applied to the faucet.
 var defaultOptions = []Option{
 	WithTokenName("TestToken"),
-	WithAmount(10_000_000),            // 10 IOTA
-	WithSmallAmount(1_000_000),        // 1 IOTA
-	WithMaxAddressBalance(20_000_000), // 20 IOTA
+	WithBaseTokenAmount(10_000_000),          // 10 IOTA
+	WithBaseTokenAmountSmall(1_000_000),      // 1 IOTA
+	WithBaseTokenAmountMaxTarget(20_000_000), // 20 IOTA
 	WithTagMessage("FAUCET"),
 	WithBatchTimeout(2 * time.Second),
 }
@@ -177,14 +182,16 @@ var defaultOptions = []Option{
 // Options define options for the faucet.
 type Options struct {
 	// the logger used to log events.
-	logger            *logger.Logger
-	tokenName         string
-	amount            iotago.BaseToken
-	smallAmount       iotago.BaseToken
-	maxAddressBalance iotago.BaseToken
-	tagMessage        []byte
-	batchTimeout      time.Duration
-	powWorkerCount    int
+	logger                   *logger.Logger
+	tokenName                string
+	baseTokenAmount          iotago.BaseToken
+	baseTokenAmountSmall     iotago.BaseToken
+	baseTokenAmountMaxTarget iotago.BaseToken
+	manaAmount               iotago.Mana
+	manaAmountMinFaucet      iotago.Mana
+	tagMessage               []byte
+	batchTimeout             time.Duration
+	powWorkerCount           int
 }
 
 // applies the given Option.
@@ -208,26 +215,41 @@ func WithTokenName(name string) Option {
 	}
 }
 
-// WithAmount defines the amount of funds the requester receives.
-func WithAmount(amount iotago.BaseToken) Option {
+// WithBaseTokenAmount defines the amount of funds the requester receives.
+func WithBaseTokenAmount(baseTokenAmount iotago.BaseToken) Option {
 	return func(opts *Options) {
-		opts.amount = amount
+		opts.baseTokenAmount = baseTokenAmount
 	}
 }
 
-// WithSmallAmount defines the amount of funds the requester receives
+// WithBaseTokenAmountSmall defines the amount of funds the requester receives
 // if the target address has more funds than the faucet amount and less than maximum.
-func WithSmallAmount(smallAmount iotago.BaseToken) Option {
+func WithBaseTokenAmountSmall(baseTokenAmountSmall iotago.BaseToken) Option {
 	return func(opts *Options) {
-		opts.smallAmount = smallAmount
+		opts.baseTokenAmountSmall = baseTokenAmountSmall
 	}
 }
 
-// WithMaxAddressBalance defines the maximum allowed amount of funds on the target address.
+// WithBaseTokenAmountMaxTarget defines the maximum allowed amount of funds on the target address.
 // If there are more funds already, the faucet request is rejected.
-func WithMaxAddressBalance(maxAddressBalance iotago.BaseToken) Option {
+func WithBaseTokenAmountMaxTarget(baseTokenAmountMaxTarget iotago.BaseToken) Option {
 	return func(opts *Options) {
-		opts.maxAddressBalance = maxAddressBalance
+		opts.baseTokenAmountMaxTarget = baseTokenAmountMaxTarget
+	}
+}
+
+// WithManaAmount defines the amount of mana the requester receives.
+func WithManaAmount(manaAmount iotago.Mana) Option {
+	return func(opts *Options) {
+		opts.manaAmount = manaAmount
+	}
+}
+
+// WithManaAmountMinFaucet defines the minimum amount of mana the faucet
+// needs to hold before mana payouts become active.
+func WithManaAmountMinFaucet(manaAmountMinFaucet iotago.Mana) Option {
+	return func(opts *Options) {
+		opts.manaAmountMinFaucet = manaAmountMinFaucet
 	}
 }
 
@@ -262,6 +284,7 @@ func New(
 	fetchTransactionMetadataFunc FetchTransactionMetadataFunc,
 	collectUnlockableFaucetOutputsFunc CollectUnlockableFaucetOutputsFunc,
 	computeUnlockableAddressBalanceFunc ComputeUnlockableAddressBalanceFunc,
+	getLatestSlotFunc GetLatestSlotFunc,
 	submitTransactionPayloadFunc SubmitTransactionPayloadFunc,
 	apiProvider iotago.APIProvider,
 	address iotago.Address,
@@ -277,6 +300,7 @@ func New(
 		isNodeHealthyFunc:                   isNodeHealthyFunc,
 		fetchTransactionMetadataFunc:        fetchTransactionMetadataFunc,
 		computeUnlockableAddressBalanceFunc: computeUnlockableAddressBalanceFunc,
+		getLatestSlotFunc:                   getLatestSlotFunc,
 		submitTransactionPayloadFunc:        submitTransactionPayloadFunc,
 		apiProvider:                         apiProvider,
 		address:                             address,
@@ -306,7 +330,7 @@ func New(
 		// calculate total balance of all pending requests
 		var pendingRequestsBalance iotago.BaseToken
 		for _, pendingRequest := range faucet.queueMap {
-			pendingRequestsBalance += pendingRequest.Amount
+			pendingRequestsBalance += pendingRequest.BaseTokenAmount
 		}
 
 		// subtract the storage deposit for a simple basic output, so we can simplify our logic for remainder handling
@@ -388,31 +412,31 @@ func (f *Faucet) Enqueue(bech32Addr string) (*EnqueueResponse, error) {
 		return nil, ierrors.Wrap(httpserver.ErrInvalidParameter, "Address is already in the queue.")
 	}
 
-	amount := f.opts.amount
+	baseTokenAmount := f.opts.baseTokenAmount
 	balance, err := f.computeUnlockableAddressBalanceFunc(addr)
-	if err == nil && balance >= f.opts.amount {
-		amount = f.opts.smallAmount
+	if err == nil && balance >= f.opts.baseTokenAmount {
+		baseTokenAmount = f.opts.baseTokenAmountSmall
 
-		if balance >= f.opts.maxAddressBalance {
+		if balance >= f.opts.baseTokenAmountMaxTarget {
 			//nolint:stylecheck,revive // this error message is shown to the user
 			return nil, ierrors.Wrap(httpserver.ErrInvalidParameter, "You already have enough funds on your address.")
 		}
 	}
 
-	if amount > f.faucetBalance {
+	if baseTokenAmount > f.faucetBalance {
 		//nolint:stylecheck,revive // this error message is shown to the user
 		return nil, ierrors.Wrap(echo.ErrInternalServerError, "Faucet does not have enough funds to process your request. Please try again later!")
 	}
 
 	request := &queueItem{
-		Bech32:  bech32Addr,
-		Amount:  amount,
-		Address: addr,
+		Bech32:          bech32Addr,
+		BaseTokenAmount: baseTokenAmount,
+		Address:         addr,
 	}
 
 	select {
 	case f.queue <- request:
-		f.faucetBalance -= amount
+		f.faucetBalance -= baseTokenAmount
 		f.queueMap[bech32Addr] = request
 
 		return &EnqueueResponse{
@@ -576,7 +600,7 @@ func (f *Faucet) processRequestsWithoutLocking(collectedRequestsCounter int, bal
 			continue
 		}
 
-		if balance < request.Amount {
+		if balance < request.BaseTokenAmount {
 			// not enough funds to process this request => ignore the request
 			f.clearRequestWithoutLocking(request)
 
@@ -584,7 +608,7 @@ func (f *Faucet) processRequestsWithoutLocking(collectedRequestsCounter int, bal
 		}
 
 		// request can be processed in this transaction
-		balance -= request.Amount
+		balance -= request.BaseTokenAmount
 		collectedRequestsCounter++
 		processedBatchedRequests = append(processedBatchedRequests, request)
 	}
@@ -612,6 +636,39 @@ func (f *Faucet) createTransactionBuilder(api iotago.API, unspentOutputs []UTXOB
 		consumedInputs = append(consumedInputs, unspentOutput.OutputID)
 	}
 
+	manaPayoutPerOutput := func() iotago.Mana {
+		// we don't know the exact slot for the transaction yet, but we use the latest slot for the estimation.
+		// this is no problem, because we issue the transaction immediately afterwards, so the commitment for block issuance should be older anyway.
+		// also we only use the stored mana in the calculation, so we don't have the influence of mana generation.
+		// because of the bigger "manaAmountMinFaucet" threshold, there is also a lot of wiggle room.
+		availableManaInputs, err := txBuilder.CalculateAvailableMana(f.getLatestSlotFunc())
+		if err != nil {
+			f.logSoftError(ierrors.Wrap(err, "failed to calculate available mana balance"))
+
+			return 0
+		}
+
+		totalManaPayouts, err := safemath.SafeMul(iotago.Mana(len(batchedRequests)), f.opts.manaAmount)
+		if err != nil {
+			f.logSoftError(ierrors.Wrap(err, "failed to calculate required total mana for payouts"))
+
+			return 0
+		}
+
+		unboundStoredManaRemainder, err := safemath.SafeSub(availableManaInputs.UnboundStoredMana, totalManaPayouts)
+		if err != nil {
+			// underflow => not enough mana left in the faucet
+			return 0
+		}
+
+		if unboundStoredManaRemainder <= f.opts.manaAmountMinFaucet {
+			// not enough mana left in the faucet
+			return 0
+		}
+
+		return f.opts.manaAmount
+	}()
+
 	// add all requests as outputs
 	for _, req := range batchedRequests {
 		outputCount++
@@ -627,15 +684,16 @@ func (f *Faucet) createTransactionBuilder(api iotago.API, unspentOutputs []UTXOB
 			break
 		}
 
-		amount := req.Amount
-		if remainderAmount < int64(amount) {
+		baseTokenAmount := req.BaseTokenAmount
+		if remainderAmount < int64(baseTokenAmount) {
 			// not enough funds left
-			amount = iotago.BaseToken(remainderAmount)
+			baseTokenAmount = iotago.BaseToken(remainderAmount)
 		}
-		remainderAmount -= int64(amount)
+		remainderAmount -= int64(baseTokenAmount)
 
 		txBuilder.AddOutput(&iotago.BasicOutput{
-			Amount: amount,
+			Amount: baseTokenAmount,
+			Mana:   manaPayoutPerOutput,
 			Conditions: iotago.BasicOutputUnlockConditions{
 				&iotago.AddressUnlockCondition{Address: req.Address},
 			},
@@ -781,7 +839,7 @@ func (f *Faucet) collectRequestsAndSendFaucetBlock(ctx context.Context) error {
 		f.LogDebugf("	unspent output %d, outputID: %s, amount: %d, mana: %d", i, unspentOutput.OutputID.ToHex(), unspentOutput.Output.Amount, unspentOutput.Output.Mana)
 	}
 	for i, processableRequest := range processableRequests {
-		f.LogDebugf("	processable request %d, address: %s, amount: %d", i, processableRequest.Bech32, processableRequest.Amount)
+		f.LogDebugf("	processable request %d, address: %s, amount: %d", i, processableRequest.Bech32, processableRequest.BaseTokenAmount)
 	}
 
 	if err := f.sendFaucetBlock(ctx, unspentOutputs, processableRequests); err != nil {
