@@ -63,7 +63,7 @@ type (
 	// GetLatestSlotFunc is a function to get the latest known slot in the network.
 	GetLatestSlotFunc func() iotago.SlotIndex
 	// SubmitTransactionPayloadFunc is a function which creates a signed transaction payload and sends it to a block issuer.
-	SubmitTransactionPayloadFunc func(ctx context.Context, builder *builder.TransactionBuilder, signer iotago.AddressSigner, storedManaOutputIndex int, numPoWWorkers ...int) (iotago.BlockPayload, iotago.BlockID, error)
+	SubmitTransactionPayloadFunc func(ctx context.Context, builder *builder.TransactionBuilder, signer iotago.AddressSigner, storedManaOutputIndex int, numPoWWorkers ...int) (iotago.ApplicationPayload, iotago.BlockID, error)
 )
 
 type UTXOBasicOutput struct {

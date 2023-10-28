@@ -253,7 +253,7 @@ func provide(c *dig.Container) error {
 			return iotago.SlotIndex(deps.NodeBridge.NodeStatus().LastAcceptedBlockSlot)
 		}
 
-		submitTransactionPayload := func(ctx context.Context, builder *builder.TransactionBuilder, signer iotago.AddressSigner, storedManaOutputIndex int, numPoWWorkers ...int) (iotago.BlockPayload, iotago.BlockID, error) {
+		submitTransactionPayload := func(ctx context.Context, builder *builder.TransactionBuilder, signer iotago.AddressSigner, storedManaOutputIndex int, numPoWWorkers ...int) (iotago.ApplicationPayload, iotago.BlockID, error) {
 			Component.LogDebug("sending transaction payload...")
 			signedTx, blockCreatedResponse, err := deps.BlockIssuerClient.SendPayloadWithTransactionBuilder(ctx, builder, signer, storedManaOutputIndex, numPoWWorkers...)
 			if err != nil {
