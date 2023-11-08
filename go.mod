@@ -16,7 +16,7 @@ require (
 	github.com/iotaledger/iota.go/v4 v4.0.0-20231108103955-bf75d703d8aa
 	github.com/labstack/echo/v4 v4.11.2
 	go.uber.org/dig v1.17.1
-	golang.org/x/time v0.3.0
+	golang.org/x/time v0.4.0
 	google.golang.org/grpc v1.59.0
 )
 
