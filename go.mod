@@ -14,7 +14,7 @@ require (
 	github.com/iotaledger/inx-app v1.0.0-rc.3.0.20231108104504-1445f545de82
 	github.com/iotaledger/inx/go v1.0.0-rc.2.0.20231108104322-f301c3573998
 	github.com/iotaledger/iota.go/v4 v4.0.0-20231108103955-bf75d703d8aa
-	github.com/labstack/echo/v4 v4.11.2
+	github.com/labstack/echo/v4 v4.11.3
 	go.uber.org/dig v1.17.1
 	golang.org/x/time v0.3.0
 	google.golang.org/grpc v1.59.0
