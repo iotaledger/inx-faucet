@@ -30,7 +30,7 @@ var (
 	EmptyBasicOutput = &iotago.BasicOutput{
 		Amount: 0,
 		Mana:   0,
-		Conditions: iotago.BasicOutputUnlockConditions{
+		UnlockConditions: iotago.BasicOutputUnlockConditions{
 			&iotago.AddressUnlockCondition{
 				Address: &iotago.RestrictedAddress{
 					Address:             &iotago.Ed25519Address{},
@@ -696,7 +696,7 @@ func (f *Faucet) createTransactionBuilder(api iotago.API, unspentOutputs []UTXOB
 		txBuilder.AddOutput(&iotago.BasicOutput{
 			Amount: baseTokenAmount,
 			Mana:   manaPayoutPerOutput,
-			Conditions: iotago.BasicOutputUnlockConditions{
+			UnlockConditions: iotago.BasicOutputUnlockConditions{
 				&iotago.AddressUnlockCondition{Address: req.Address},
 			},
 		})
@@ -706,7 +706,7 @@ func (f *Faucet) createTransactionBuilder(api iotago.API, unspentOutputs []UTXOB
 	if remainderAmount > 0 {
 		txBuilder.AddOutput(&iotago.BasicOutput{
 			Amount: iotago.BaseToken(remainderAmount),
-			Conditions: iotago.BasicOutputUnlockConditions{
+			UnlockConditions: iotago.BasicOutputUnlockConditions{
 				&iotago.AddressUnlockCondition{Address: f.address},
 			},
 		})
