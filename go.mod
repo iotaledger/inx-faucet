@@ -3,17 +3,17 @@ module github.com/iotaledger/inx-faucet
 go 1.21
 
 require (
-	github.com/iotaledger/hive.go/app v0.0.0-20231110120127-f90b276b7c05
-	github.com/iotaledger/hive.go/core v1.0.0-rc.3.0.20231110120127-f90b276b7c05
-	github.com/iotaledger/hive.go/crypto v0.0.0-20231110120127-f90b276b7c05
-	github.com/iotaledger/hive.go/ds v0.0.0-20231110120127-f90b276b7c05
-	github.com/iotaledger/hive.go/ierrors v0.0.0-20231110120127-f90b276b7c05
-	github.com/iotaledger/hive.go/lo v0.0.0-20231110120127-f90b276b7c05
-	github.com/iotaledger/hive.go/logger v0.0.0-20231110120127-f90b276b7c05
-	github.com/iotaledger/hive.go/runtime v0.0.0-20231110120127-f90b276b7c05
-	github.com/iotaledger/inx-app v1.0.0-rc.3.0.20231110132801-e38d9fbdd467
-	github.com/iotaledger/inx/go v1.0.0-rc.2.0.20231110132251-8abdb05cce43
-	github.com/iotaledger/iota.go/v4 v4.0.0-20231110131407-263d0662856b
+	github.com/iotaledger/hive.go/app v0.0.0-20231113110812-4ca2b6cc9a42
+	github.com/iotaledger/hive.go/core v1.0.0-rc.3.0.20231113110812-4ca2b6cc9a42
+	github.com/iotaledger/hive.go/crypto v0.0.0-20231113110812-4ca2b6cc9a42
+	github.com/iotaledger/hive.go/ds v0.0.0-20231113110812-4ca2b6cc9a42
+	github.com/iotaledger/hive.go/ierrors v0.0.0-20231113110812-4ca2b6cc9a42
+	github.com/iotaledger/hive.go/lo v0.0.0-20231113110812-4ca2b6cc9a42
+	github.com/iotaledger/hive.go/logger v0.0.0-20231113110812-4ca2b6cc9a42
+	github.com/iotaledger/hive.go/runtime v0.0.0-20231113110812-4ca2b6cc9a42
+	github.com/iotaledger/inx-app v1.0.0-rc.3.0.20231120133804-ac348260c0b7
+	github.com/iotaledger/inx/go v1.0.0-rc.2.0.20231120082637-ccd5b8465251
+	github.com/iotaledger/iota.go/v4 v4.0.0-20231120063545-80c263f28140
 	github.com/labstack/echo/v4 v4.11.3
 	go.uber.org/dig v1.17.1
 	golang.org/x/time v0.4.0
@@ -28,7 +28,7 @@ require (
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.2.0 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/eclipse/paho.mqtt.golang v1.4.3 // indirect
-	github.com/ethereum/go-ethereum v1.13.4 // indirect
+	github.com/ethereum/go-ethereum v1.13.5 // indirect
 	github.com/fatih/structs v1.1.0 // indirect
 	github.com/felixge/fgprof v0.9.3 // indirect
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
@@ -43,9 +43,9 @@ require (
 	github.com/hashicorp/go-version v1.6.0 // indirect
 	github.com/holiman/uint256 v1.2.3 // indirect
 	github.com/iancoleman/orderedmap v0.3.0 // indirect
-	github.com/iotaledger/hive.go/constraints v0.0.0-20231110120127-f90b276b7c05 // indirect
-	github.com/iotaledger/hive.go/serializer/v2 v2.0.0-rc.1.0.20231110120127-f90b276b7c05 // indirect
-	github.com/iotaledger/hive.go/stringify v0.0.0-20231110120127-f90b276b7c05 // indirect
+	github.com/iotaledger/hive.go/constraints v0.0.0-20231113110812-4ca2b6cc9a42 // indirect
+	github.com/iotaledger/hive.go/serializer/v2 v2.0.0-rc.1.0.20231113110812-4ca2b6cc9a42 // indirect
+	github.com/iotaledger/hive.go/stringify v0.0.0-20231113110812-4ca2b6cc9a42 // indirect
 	github.com/knadh/koanf v1.5.0 // indirect
 	github.com/kr/text v0.2.0 // indirect
 	github.com/labstack/gommon v0.4.1 // indirect
