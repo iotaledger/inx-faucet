@@ -25,9 +25,9 @@ import (
 	"github.com/iotaledger/inx-faucet/pkg/daemon"
 	"github.com/iotaledger/inx-faucet/pkg/faucet"
 	iotago "github.com/iotaledger/iota.go/v4"
+	"github.com/iotaledger/iota.go/v4/api"
 	"github.com/iotaledger/iota.go/v4/builder"
 	"github.com/iotaledger/iota.go/v4/nodeclient"
-	"github.com/iotaledger/iota.go/v4/nodeclient/apimodels"
 )
 
 const (
@@ -145,7 +145,7 @@ func provide(c *dig.Container) error {
 
 			// the restricted address only returns simple outputs, which are basic outputs without timelocks,
 			// expiration, native tokens, storage deposit return unlocks conditions.
-			query := &apimodels.BasicOutputsQuery{
+			query := &api.BasicOutputsQuery{
 				AddressBech32: faucetAddressRestricted.Bech32(deps.NodeBridge.APIProvider().CommittedAPI().ProtocolParameters().Bech32HRP()),
 			}
 
@@ -189,8 +189,8 @@ func provide(c *dig.Container) error {
 			defer cancelRequest()
 
 			// collect all possible outputs that are owned by that address and evaluate later if they are unlockable.
-			query := &apimodels.OutputsQuery{
-				IndexerUnlockableByAddressParams: apimodels.IndexerUnlockableByAddressParams{
+			query := &api.OutputsQuery{
+				IndexerUnlockableByAddressParams: api.IndexerUnlockableByAddressParams{
 					UnlockableByAddressBech32: address.Bech32(deps.NodeBridge.APIProvider().CommittedAPI().ProtocolParameters().Bech32HRP()),
 				},
 			}
