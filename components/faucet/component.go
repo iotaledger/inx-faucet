@@ -52,7 +52,7 @@ var (
 
 type dependencies struct {
 	dig.In
-	NodeBridge      *nodebridge.NodeBridge
+	NodeBridge      nodebridge.NodeBridge
 	Faucet          *faucet.Faucet
 	ShutdownHandler *shutdown.ShutdownHandler
 }
@@ -69,23 +69,16 @@ func provide(c *dig.Container) error {
 	// get the block issuer client
 	type blockIssuerClientDeps struct {
 		dig.In
-		NodeBridge *nodebridge.NodeBridge
+		NodeBridge nodebridge.NodeBridge
 	}
 
 	if err := c.Provide(func(deps blockIssuerClientDeps) (nodeclient.BlockIssuerClient, error) {
-		Component.LogInfo("Initializing INX node client...")
-		nodeClient, err := deps.NodeBridge.INXNodeClient()
-		if err != nil {
-			return nil, err
-		}
-		Component.LogInfo("Initializing INX node client...done!")
-
 		ctx, cancel := context.WithTimeout(Component.Daemon().ContextStopped(), 5*time.Second)
 		defer cancel()
 
 		Component.LogInfo("Initializing blockissuer...")
 
-		blockissuer, err := nodeClient.BlockIssuer(ctx)
+		blockissuer, err := deps.NodeBridge.BlockIssuer(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -99,7 +92,7 @@ func provide(c *dig.Container) error {
 
 	type faucetDeps struct {
 		dig.In
-		NodeBridge        *nodebridge.NodeBridge
+		NodeBridge        nodebridge.NodeBridge
 		BlockIssuerClient nodeclient.BlockIssuerClient
 	}
 
@@ -279,7 +272,7 @@ func provide(c *dig.Container) error {
 			faucetAddressRestricted,
 			faucetSigner,
 			faucet.WithLogger(Component.Logger()),
-			faucet.WithTokenName(deps.NodeBridge.NodeConfig.BaseToken.Name),
+			faucet.WithTokenName(deps.NodeBridge.NodeConfig().BaseToken.Name),
 			faucet.WithBaseTokenAmount(iotago.BaseToken(ParamsFaucet.BaseTokenAmount)),
 			faucet.WithBaseTokenAmountSmall(iotago.BaseToken(ParamsFaucet.BaseTokenAmountSmall)),
 			faucet.WithBaseTokenAmountMaxTarget(iotago.BaseToken(ParamsFaucet.BaseTokenAmountMaxTarget)),
@@ -309,11 +302,11 @@ func run() error {
 			// outputs that are created and consumed in the same update exist in both maps.
 			createdOutputs := make(map[iotago.OutputID]struct{})
 			for _, output := range tx.Created {
-				createdOutputs[output.UnwrapOutputID()] = types.Void
+				createdOutputs[output.OutputID] = types.Void
 			}
 			consumedOutputs := make(map[iotago.OutputID]struct{})
-			for _, spent := range tx.Consumed {
-				consumedOutputs[spent.GetOutput().UnwrapOutputID()] = types.Void
+			for _, output := range tx.Consumed {
+				consumedOutputs[output.OutputID] = types.Void
 			}
 
 			err := deps.Faucet.ApplyAcceptedTransaction(createdOutputs, consumedOutputs)
