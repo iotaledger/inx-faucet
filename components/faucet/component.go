@@ -98,11 +98,11 @@ func provide(c *dig.Container) error {
 
 	if err := c.Provide(func(deps faucetDeps) (*faucet.Faucet, error) {
 
-		fetchTransactionMetadata := func(blockID iotago.BlockID) (*faucet.TransactionMetadata, error) {
+		fetchTransactionMetadata := func(transactionID iotago.TransactionID) (*api.TransactionMetadataResponse, error) {
 			ctx, cancel := context.WithTimeout(Component.Daemon().ContextStopped(), 5*time.Second)
 			defer cancel()
 
-			metadata, err := deps.NodeBridge.BlockMetadata(ctx, blockID)
+			metadata, err := deps.NodeBridge.TransactionMetadata(ctx, transactionID)
 			if err != nil {
 				st, ok := status.FromError(err)
 				if ok && st.Code() == codes.NotFound {
@@ -114,10 +114,7 @@ func provide(c *dig.Container) error {
 				return nil, err
 			}
 
-			return &faucet.TransactionMetadata{
-				State:         metadata.GetTransactionState(),
-				FailureReason: metadata.GetTransactionFailureReason(),
-			}, nil
+			return metadata, nil
 		}
 
 		Component.LogInfo("Initializing indexer...")
