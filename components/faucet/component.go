@@ -306,12 +306,9 @@ func run() error {
 				consumedOutputs[output.OutputID] = types.Void
 			}
 
-			err := deps.Faucet.ApplyAcceptedTransaction(createdOutputs, consumedOutputs)
-			if err != nil {
-				deps.ShutdownHandler.SelfShutdown(fmt.Sprintf("faucet plugin hit a critical error while applying new accepted transaction: %s", err.Error()), true)
-			}
+			deps.Faucet.ApplyAcceptedTransaction(createdOutputs, consumedOutputs)
 
-			return err
+			return nil
 		}); err != nil {
 			deps.ShutdownHandler.SelfShutdown(fmt.Sprintf("Listening to AcceptedTransactions failed, error: %s", err), false)
 		}
