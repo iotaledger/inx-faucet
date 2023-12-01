@@ -309,17 +309,19 @@ func run() error {
 				consumedOutputs[output.OutputID] = types.Void
 			}
 
-			// TODO: replace this workaround for slow reading with a proper solution
-			go deps.Faucet.ApplyAcceptedTransaction(createdOutputs, consumedOutputs)
+			// replace this workaround for slow reading with a proper solution
+			go func() {
+				_ = deps.Faucet.ApplyAcceptedTransaction(createdOutputs, consumedOutputs)
+			}()
 
 			return nil
 
-			//err := deps.Faucet.ApplyAcceptedTransaction(createdOutputs, consumedOutputs)
-			//if err != nil {
+			// err := deps.Faucet.ApplyAcceptedTransaction(createdOutputs, consumedOutputs)
+			// if err != nil {
 			//	deps.ShutdownHandler.SelfShutdown(fmt.Sprintf("faucet plugin hit a critical error while applying new accepted transaction: %s", err.Error()), true)
-			//}
+			// }
 			//
-			//return err
+			// return err
 		}); err != nil {
 			deps.ShutdownHandler.SelfShutdown(fmt.Sprintf("Listening to AcceptedTransactions failed, error: %s", err), false)
 		}
