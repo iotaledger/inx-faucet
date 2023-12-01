@@ -15,8 +15,8 @@ import (
 	"github.com/iotaledger/hive.go/runtime/syncutils"
 	"github.com/iotaledger/hive.go/runtime/timeutil"
 	"github.com/iotaledger/inx-app/pkg/httpserver"
-	inx "github.com/iotaledger/inx/go"
 	iotago "github.com/iotaledger/iota.go/v4"
+	"github.com/iotaledger/iota.go/v4/api"
 	"github.com/iotaledger/iota.go/v4/builder"
 )
 
@@ -42,18 +42,12 @@ var (
 	}
 )
 
-// TransactionMetadata contains the transaction metadata required by the faucet.
-type TransactionMetadata struct {
-	State         inx.BlockMetadata_TransactionState
-	FailureReason inx.BlockMetadata_TransactionFailureReason
-}
-
 type (
 	// IsNodeHealthyFunc is a function to query if the used node is synced.
 	IsNodeHealthyFunc func() bool
-	// FetchTransactionMetadataFunc is a function to fetch the required metadata of a transaction contained in a block for a given block ID.
-	// This returns nil if the block is not found.
-	FetchTransactionMetadataFunc func(blockID iotago.BlockID) (*TransactionMetadata, error)
+	// FetchTransactionMetadataFunc is a function to fetch the required metadata of a transaction.
+	// This returns nil if the transaction is not found.
+	FetchTransactionMetadataFunc func(transactionID iotago.TransactionID) (*api.TransactionMetadataResponse, error)
 	// CollectUnlockableFaucetOutputsFunc is a function to collect the unlockable outputs of the faucet.
 	CollectUnlockableFaucetOutputsFunc func() ([]UTXOBasicOutput, error)
 	// CollectUnlockableFaucetOutputsAndBalanceFunc is a function to collect the unlockable outputs and the balance of the faucet.
@@ -904,7 +898,7 @@ func (f *Faucet) checkPendingTransactionState() {
 		return
 	}
 
-	metadata, err := f.fetchTransactionMetadataFunc(pendingTx.BlockID)
+	metadata, err := f.fetchTransactionMetadataFunc(pendingTx.TransactionID)
 	if err != nil {
 		// an error occurred => re-add the items to the queue and delete the pending transaction
 		f.logSoftError(ierrors.Errorf("failed to fetch metadata of the pending transaction, blockID: %s, txID: %s", pendingTx.BlockID, pendingTx.TransactionID))
@@ -922,27 +916,27 @@ func (f *Faucet) checkPendingTransactionState() {
 		return
 	}
 
-	switch metadata.State {
-	case inx.BlockMetadata_TRANSACTION_STATE_NO_TRANSACTION:
+	switch metadata.TransactionState {
+	case api.TransactionStateNoTransaction:
 		// transaction is not known, so the block must have been filtered
 		// => re-add the items to the queue and delete the pending transaction
 		f.logSoftError(ierrors.Errorf("metadata of the pending transaction is no transaction, blockID: %s, txID: %s", pendingTx.BlockID, pendingTx.TransactionID))
 		f.readdPendingRequestsWithoutLocking()
 
-	case inx.BlockMetadata_TRANSACTION_STATE_PENDING:
+	case api.TransactionStatePending:
 		// transaction is still pending
 		f.LogDebugf("checkPendingTransactionState: transaction still pending, blockID: %s, txID: %s", pendingTx.BlockID, pendingTx.TransactionID)
 
-	case inx.BlockMetadata_TRANSACTION_STATE_ACCEPTED, inx.BlockMetadata_TRANSACTION_STATE_CONFIRMED, inx.BlockMetadata_TRANSACTION_STATE_FINALIZED:
+	case api.TransactionStateAccepted, api.TransactionStateConfirmed, api.TransactionStateFinalized:
 		// transaction was confirmed
 		// => delete the requests and the pending transaction
 		f.LogDebugf("checkPendingTransactionState: transaction successful, blockID: %s, txID: %s", pendingTx.BlockID, pendingTx.TransactionID)
 		f.clearPendingRequestsWithoutLocking()
 
-	case inx.BlockMetadata_TRANSACTION_STATE_FAILED:
+	case api.TransactionStateFailed:
 		// transaction failed
 		// => re-add the items to the queue and delete the pending transaction
-		f.logSoftError(ierrors.Errorf("transaction failed, blockID: %s, txID: %s, reason: %d", pendingTx.BlockID, pendingTx.TransactionID, metadata.FailureReason))
+		f.logSoftError(ierrors.Errorf("transaction failed, blockID: %s, txID: %s, reason: %d", pendingTx.BlockID, pendingTx.TransactionID, metadata.TransactionFailureReason))
 		f.readdPendingRequestsWithoutLocking()
 	}
 }
