@@ -63,7 +63,7 @@ func provide(c *dig.Container) error {
 	// we only allow to receive mana, the rest is blocked.
 	faucetAddressRestricted, faucetSigner, err := getRestrictedFaucetAddressAndSigner()
 	if err != nil {
-		Component.LogErrorAndExit(err)
+		Component.LogFatal(err.Error())
 	}
 
 	// get the block issuer client
@@ -87,7 +87,7 @@ func provide(c *dig.Container) error {
 
 		return blockissuer, nil
 	}); err != nil {
-		Component.LogPanic(err)
+		Component.LogPanic(err.Error())
 	}
 
 	type faucetDeps struct {
@@ -268,7 +268,7 @@ func provide(c *dig.Container) error {
 			deps.NodeBridge.APIProvider(),
 			faucetAddressRestricted,
 			faucetSigner,
-			faucet.WithLogger(Component.Logger()),
+			faucet.WithLogger(Component.Logger),
 			faucet.WithTokenName(deps.NodeBridge.NodeConfig().BaseToken.Name),
 			faucet.WithBaseTokenAmount(iotago.BaseToken(ParamsFaucet.BaseTokenAmount)),
 			faucet.WithBaseTokenAmountSmall(iotago.BaseToken(ParamsFaucet.BaseTokenAmountSmall)),
@@ -284,7 +284,7 @@ func provide(c *dig.Container) error {
 
 		return faucet, nil
 	}); err != nil {
-		Component.LogPanic(err)
+		Component.LogPanic(err.Error())
 	}
 
 	return nil
@@ -325,7 +325,7 @@ func run() error {
 		Component.LogPanicf("failed to start worker: %s", err)
 	}
 
-	e := httpserver.NewEcho(Component.Logger(), nil, ParamsFaucet.DebugRequestLoggerEnabled)
+	e := httpserver.NewEcho(Component.Logger, nil, ParamsFaucet.DebugRequestLoggerEnabled)
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
 		AllowOrigins: []string{"*"},
 		AllowMethods: []string{http.MethodGet, http.MethodPost},
