@@ -11,7 +11,7 @@ import (
 	"github.com/iotaledger/hive.go/app/daemon"
 	"github.com/iotaledger/hive.go/core/safemath"
 	"github.com/iotaledger/hive.go/ierrors"
-	"github.com/iotaledger/hive.go/logger"
+	"github.com/iotaledger/hive.go/log"
 	"github.com/iotaledger/hive.go/runtime/event"
 	"github.com/iotaledger/hive.go/runtime/syncutils"
 	"github.com/iotaledger/hive.go/runtime/timeutil"
@@ -122,7 +122,7 @@ type Faucet struct {
 	// lock used to secure the state of the faucet.
 	syncutils.RWMutex
 	// the logger used to log events.
-	*logger.WrappedLogger
+	log.Logger
 	// used to access the global daemon.
 	daemon daemon.Daemon
 
@@ -179,7 +179,7 @@ var defaultOptions = []Option{
 // Options define options for the faucet.
 type Options struct {
 	// the logger used to log events.
-	logger                   *logger.Logger
+	logger                   log.Logger
 	tokenName                string
 	baseTokenAmount          iotago.BaseToken
 	baseTokenAmountSmall     iotago.BaseToken
@@ -199,7 +199,7 @@ func (so *Options) apply(opts ...Option) {
 }
 
 // WithLogger enables logging within the faucet.
-func WithLogger(logger *logger.Logger) Option {
+func WithLogger(logger log.Logger) Option {
 	return func(opts *Options) {
 		opts.logger = logger
 	}
@@ -351,7 +351,7 @@ func New(
 		return unspentOutputs, balance, nil
 	}
 
-	faucet.WrappedLogger = logger.NewWrappedLogger(options.logger)
+	faucet.Logger = options.logger
 	faucet.init()
 
 	return faucet
@@ -457,7 +457,7 @@ func (f *Faucet) FlushRequests() {
 
 // logSoftError logs a soft error and triggers the event.
 func (f *Faucet) logSoftError(err error) {
-	f.LogWarn(err)
+	f.LogWarn(err.Error())
 	f.Events.SoftError.Trigger(err)
 }
 
