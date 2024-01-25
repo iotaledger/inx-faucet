@@ -12,7 +12,7 @@ require (
 	github.com/iotaledger/hive.go/log v0.0.0-20240123132714-180e65c33a1d
 	github.com/iotaledger/hive.go/runtime v0.0.0-20240123132714-180e65c33a1d
 	github.com/iotaledger/inx-app v1.0.0-rc.3.0.20240123171338-c9f82bbb8ad6
-	github.com/iotaledger/iota.go/v4 v4.0.0-20240123170900-42c1479d3f30
+	github.com/iotaledger/iota.go/v4 v4.0.0-20240125100757-710b71462194
 	github.com/labstack/echo/v4 v4.11.4
 	go.uber.org/dig v1.17.1
 	golang.org/x/time v0.5.0
