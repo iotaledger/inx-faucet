@@ -650,7 +650,7 @@ func (f *Faucet) createTransactionBuilder(api iotago.API, unspentOutputs []UTXOB
 		// this is no problem, because we issue the transaction immediately afterwards, so the commitment for block issuance should be older anyway.
 		// also we only use the stored mana in the calculation, so we don't have the influence of mana generation.
 		// because of the bigger "manaAmountMinFaucet" threshold, there is also a lot of wiggle room.
-		availableManaInputs, err := txBuilder.CalculateAvailableMana(f.getLatestSlotFunc())
+		availableManaInputs, err := txBuilder.CalculateAvailableManaInputs(f.getLatestSlotFunc())
 		if err != nil {
 			f.logSoftError(ierrors.Wrap(err, "failed to calculate available mana balance"))
 
