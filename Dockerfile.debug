@@ -1,0 +1,55 @@
+# https://hub.docker.com/_/golang
+FROM golang:1.22-bullseye AS build
+
+# Ensure ca-certificates are up to date
+RUN update-ca-certificates
+
+# Set the current Working Directory inside the container
+RUN mkdir /scratch
+WORKDIR /scratch
+
+# Prepare the folder where we are putting all the files
+RUN mkdir /app
+
+# Copy everything from the current directory to the PWD(Present Working Directory) inside the container
+COPY . .
+
+# Download go modules
+RUN go mod download
+RUN go mod verify
+
+# Build the binary (disable inlining and optimizations that can interfere with debugging)
+RUN CGO_ENABLED=0 go build -a -gcflags "all=-N -l" -o /app/inx-faucet .
+
+# Copy the assets
+COPY ./config_defaults.json /app/config.json
+
+############################
+# Image
+############################
+FROM golang:1.22-alpine
+
+# Install delve
+RUN CGO_ENABLED=0 go install -ldflags "-s -w -extldflags '-static'" github.com/go-delve/delve/cmd/dlv@latest
+
+# Create the nonroot user
+ARG USERNAME=nonroot_user
+ARG USER_UID=65532
+ARG USER_GID=$USER_UID
+ARG USER_HOME=/home/nonroot
+RUN addgroup --g $USER_GID $USERNAME && adduser --disabled-password --uid $USER_UID --ingroup "${USERNAME}" --shell /sbin/nologin --home $USER_HOME $USERNAME
+
+EXPOSE 8091/tcp
+
+# Delve
+EXPOSE 4000  
+
+# Copy the app dir into distroless image
+COPY --chown=nonroot:nonroot --from=build /app /app
+
+WORKDIR /app
+
+# Set USER nonroot
+USER $USERNAME
+
+ENTRYPOINT [ "/go/bin/dlv", "--listen=:4000", "--headless=true", "--log=true", "--accept-multiclient", "--api-version=2", "exec", "/app/inx-faucet", "--" ]
