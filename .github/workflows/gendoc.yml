@@ -9,6 +9,11 @@ jobs:
   gendoc:
     runs-on: ubuntu-latest
     steps:
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v4
+        with:
+          submodules: 'true'
+
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
@@ -18,11 +23,6 @@ jobs:
 
       - name: Print Go version
         run: go version
-
-      - name: Check out code into the Go module directory
-        uses: actions/checkout@v4
-        with:
-          submodules: 'true'
 
       - name: Run gendoc
         working-directory: tools/gendoc
