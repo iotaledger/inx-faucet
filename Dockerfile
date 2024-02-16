@@ -1,5 +1,7 @@
 # https://hub.docker.com/_/golang
-FROM golang:1.21-bullseye AS build
+FROM golang:1.22-bullseye AS build
+
+ARG BUILD_VERSION=v2.0.0-develop
 
 # Ensure ca-certificates are up to date
 RUN update-ca-certificates
@@ -19,7 +21,7 @@ RUN go mod download
 RUN go mod verify
 
 # Build the binary
-RUN go build -o /app/inx-faucet -a
+RUN go build -o /app/inx-faucet -a -ldflags="-w -s -X=github.com/iotaledger/inx-faucet/components/app.Version=${BUILD_VERSION}"
 
 # Copy the assets
 COPY ./config_defaults.json /app/config.json
@@ -27,9 +29,11 @@ COPY ./config_defaults.json /app/config.json
 ############################
 # Image
 ############################
-# https://console.cloud.google.com/gcr/images/distroless/global/cc-debian11
+# https://console.cloud.google.com/gcr/images/distroless/global/cc-debian12
 # using distroless cc "nonroot" image, which includes everything in the base image (glibc, libssl and openssl)
-FROM gcr.io/distroless/cc-debian11:nonroot
+FROM gcr.io/distroless/cc-debian12:nonroot
+
+EXPOSE 8091/tcp
 
 # Copy the app dir into distroless image
 COPY --chown=nonroot:nonroot --from=build /app /app

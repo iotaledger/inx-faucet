@@ -1,11 +1,11 @@
 module github.com/iotaledger/inx-faucet/tools/gendoc
 
-go 1.21
+go 1.22
 
 replace github.com/iotaledger/inx-faucet => ../../
 
 require (
-	github.com/iotaledger/hive.go/app v0.0.0-20240214175801-9ca9f93790f5
+	github.com/iotaledger/hive.go/app v0.0.0-20240216135101-261e99d9d84a
 	github.com/iotaledger/hive.go/apputils v0.0.0-20230417125513-e2e89991217f
 	github.com/iotaledger/inx-faucet v0.0.0-00010101000000-000000000000
 )
@@ -34,19 +34,19 @@ require (
 	github.com/hashicorp/go-version v1.6.0 // indirect
 	github.com/holiman/uint256 v1.2.4 // indirect
 	github.com/iancoleman/orderedmap v0.3.0 // indirect
-	github.com/iotaledger/hive.go/constraints v0.0.0-20240214175801-9ca9f93790f5 // indirect
-	github.com/iotaledger/hive.go/core v1.0.0-rc.3.0.20240214175801-9ca9f93790f5 // indirect
-	github.com/iotaledger/hive.go/crypto v0.0.0-20240214175801-9ca9f93790f5 // indirect
-	github.com/iotaledger/hive.go/ds v0.0.0-20240214175801-9ca9f93790f5 // indirect
-	github.com/iotaledger/hive.go/ierrors v0.0.0-20240214175801-9ca9f93790f5 // indirect
-	github.com/iotaledger/hive.go/lo v0.0.0-20240214175801-9ca9f93790f5 // indirect
-	github.com/iotaledger/hive.go/log v0.0.0-20240214175801-9ca9f93790f5 // indirect
-	github.com/iotaledger/hive.go/runtime v0.0.0-20240214175801-9ca9f93790f5 // indirect
-	github.com/iotaledger/hive.go/serializer/v2 v2.0.0-rc.1.0.20240214175801-9ca9f93790f5 // indirect
-	github.com/iotaledger/hive.go/stringify v0.0.0-20240214175801-9ca9f93790f5 // indirect
-	github.com/iotaledger/inx-app v1.0.0-rc.3.0.20240214181534-9a393ea95057 // indirect
-	github.com/iotaledger/inx/go v1.0.0-rc.2.0.20240214181217-a6dd0abaab8d // indirect
-	github.com/iotaledger/iota.go/v4 v4.0.0-20240214180848-ff6a4bb7bc41 // indirect
+	github.com/iotaledger/hive.go/constraints v0.0.0-20240216135101-261e99d9d84a // indirect
+	github.com/iotaledger/hive.go/core v1.0.0-rc.3.0.20240216135101-261e99d9d84a // indirect
+	github.com/iotaledger/hive.go/crypto v0.0.0-20240216135101-261e99d9d84a // indirect
+	github.com/iotaledger/hive.go/ds v0.0.0-20240216135101-261e99d9d84a // indirect
+	github.com/iotaledger/hive.go/ierrors v0.0.0-20240216135101-261e99d9d84a // indirect
+	github.com/iotaledger/hive.go/lo v0.0.0-20240216135101-261e99d9d84a // indirect
+	github.com/iotaledger/hive.go/log v0.0.0-20240216135101-261e99d9d84a // indirect
+	github.com/iotaledger/hive.go/runtime v0.0.0-20240216135101-261e99d9d84a // indirect
+	github.com/iotaledger/hive.go/serializer/v2 v2.0.0-rc.1.0.20240216135101-261e99d9d84a // indirect
+	github.com/iotaledger/hive.go/stringify v0.0.0-20240216135101-261e99d9d84a // indirect
+	github.com/iotaledger/inx-app v1.0.0-rc.3.0.20240216141618-d7dfe94bdc1e // indirect
+	github.com/iotaledger/inx/go v1.0.0-rc.2.0.20240216141023-6d5f4ef12ac5 // indirect
+	github.com/iotaledger/iota.go/v4 v4.0.0-20240216140514-c867d6524642 // indirect
 	github.com/knadh/koanf v1.5.0 // indirect
 	github.com/kr/text v0.2.0 // indirect
 	github.com/labstack/echo/v4 v4.11.4 // indirect
@@ -62,7 +62,7 @@ require (
 	github.com/petermattis/goid v0.0.0-20231207134359-e60b3f734c67 // indirect
 	github.com/prometheus/client_golang v1.18.0 // indirect
 	github.com/prometheus/client_model v0.5.0 // indirect
-	github.com/prometheus/common v0.46.0 // indirect
+	github.com/prometheus/common v0.47.0 // indirect
 	github.com/prometheus/procfs v0.12.0 // indirect
 	github.com/rogpeppe/go-internal v1.11.0 // indirect
 	github.com/sasha-s/go-deadlock v0.3.1 // indirect
