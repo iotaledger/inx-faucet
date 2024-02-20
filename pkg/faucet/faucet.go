@@ -666,11 +666,15 @@ func (f *Faucet) createTransactionBuilder(api iotago.API, unspentOutputs []UTXOB
 
 		unboundStoredManaRemainder, err := safemath.SafeSub(availableManaInputs.UnboundStoredMana, totalManaPayouts)
 		if err != nil {
+			f.logSoftError(ierrors.Wrapf(err, "not enough mana left in the faucet to do the payouts: %d < %d", availableManaInputs.UnboundStoredMana, totalManaPayouts))
+
 			// underflow => not enough mana left in the faucet
 			return 0
 		}
 
 		if unboundStoredManaRemainder <= f.opts.manaAmountMinFaucet {
+			f.logSoftError(ierrors.Errorf("not enough mana left in the faucet: %d < %d", unboundStoredManaRemainder, f.opts.manaAmountMinFaucet))
+
 			// not enough mana left in the faucet
 			return 0
 		}
