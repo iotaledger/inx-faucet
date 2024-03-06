@@ -11,8 +11,8 @@ require (
 	github.com/iotaledger/hive.go/lo v0.0.0-20240305162344-4b8be588e1cf
 	github.com/iotaledger/hive.go/log v0.0.0-20240223134921-02b9a2022431
 	github.com/iotaledger/hive.go/runtime v0.0.0-20240305162344-4b8be588e1cf
-	github.com/iotaledger/inx-app v1.0.0-rc.3.0.20240216141618-d7dfe94bdc1e
-	github.com/iotaledger/iota.go/v4 v4.0.0-20240305173701-2dae7ac7d3a0
+	github.com/iotaledger/inx-app v1.0.0-rc.3.0.20240307031811-4499333137dc
+	github.com/iotaledger/iota.go/v4 v4.0.0-20240306094846-0db7d71da0f0
 	github.com/labstack/echo/v4 v4.11.4
 	go.uber.org/dig v1.17.1
 	golang.org/x/time v0.5.0
@@ -45,7 +45,7 @@ require (
 	github.com/iotaledger/hive.go/constraints v0.0.0-20240305162344-4b8be588e1cf // indirect
 	github.com/iotaledger/hive.go/serializer/v2 v2.0.0-rc.1.0.20240305162344-4b8be588e1cf // indirect
 	github.com/iotaledger/hive.go/stringify v0.0.0-20240305162344-4b8be588e1cf // indirect
-	github.com/iotaledger/inx/go v1.0.0-rc.2.0.20240216141023-6d5f4ef12ac5 // indirect
+	github.com/iotaledger/inx/go v1.0.0-rc.2.0.20240307031546-fb8a031ab5b6 // indirect
 	github.com/knadh/koanf v1.5.0 // indirect
 	github.com/kr/text v0.2.0 // indirect
 	github.com/labstack/gommon v0.4.2 // indirect
