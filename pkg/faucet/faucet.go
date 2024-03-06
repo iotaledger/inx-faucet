@@ -629,7 +629,7 @@ func (f *Faucet) processRequestsWithoutLocking(collectedRequestsCounter int, bal
 
 // createTransactionBuilder creates a transaction builder with all inputs and batched requests.
 func (f *Faucet) createTransactionBuilder(api iotago.API, unspentOutputs []UTXOBasicOutput, batchedRequests []*queueItem) (*builder.TransactionBuilder, iotago.OutputIDs, int) {
-	txBuilder := builder.NewTransactionBuilder(api)
+	txBuilder := builder.NewTransactionBuilder(api, f.addressSigner)
 	txBuilder.AddTaggedDataPayload(&iotago.TaggedData{Tag: f.opts.tagMessage, Data: nil})
 
 	var outputCount int
