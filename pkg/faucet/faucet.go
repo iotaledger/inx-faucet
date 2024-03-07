@@ -58,7 +58,7 @@ type (
 	// GetLatestSlotFunc is a function to get the latest known slot in the network.
 	GetLatestSlotFunc func() iotago.SlotIndex
 	// SubmitTransactionPayloadFunc is a function which creates a signed transaction payload and sends it to a block issuer.
-	SubmitTransactionPayloadFunc func(ctx context.Context, builder *builder.TransactionBuilder, signer iotago.AddressSigner, storedManaOutputIndex int, numPoWWorkers ...int) (iotago.ApplicationPayload, iotago.BlockID, error)
+	SubmitTransactionPayloadFunc func(ctx context.Context, builder *builder.TransactionBuilder, storedManaOutputIndex int, numPoWWorkers ...int) (iotago.ApplicationPayload, iotago.BlockID, error)
 )
 
 type UTXOBasicOutput struct {
@@ -629,7 +629,7 @@ func (f *Faucet) processRequestsWithoutLocking(collectedRequestsCounter int, bal
 
 // createTransactionBuilder creates a transaction builder with all inputs and batched requests.
 func (f *Faucet) createTransactionBuilder(api iotago.API, unspentOutputs []UTXOBasicOutput, batchedRequests []*queueItem) (*builder.TransactionBuilder, iotago.OutputIDs, int) {
-	txBuilder := builder.NewTransactionBuilder(api)
+	txBuilder := builder.NewTransactionBuilder(api, f.addressSigner)
 	txBuilder.AddTaggedDataPayload(&iotago.TaggedData{Tag: f.opts.tagMessage, Data: nil})
 
 	var outputCount int
@@ -733,7 +733,7 @@ func (f *Faucet) sendFaucetBlockWithoutLocking(ctx context.Context, unspentOutpu
 
 	txBuilder, consumedInputs, remainderOutputIndex := f.createTransactionBuilder(api, unspentOutputs, batchedRequests)
 
-	blockPayload, blockID, err := f.submitTransactionPayloadFunc(ctx, txBuilder, f.addressSigner, remainderOutputIndex, f.opts.powWorkerCount)
+	blockPayload, blockID, err := f.submitTransactionPayloadFunc(ctx, txBuilder, remainderOutputIndex, f.opts.powWorkerCount)
 	if err != nil {
 		return ierrors.Errorf("submit faucet transaction payload failed, error: %w", err)
 	}
@@ -931,7 +931,7 @@ func (f *Faucet) checkPendingTransactionState() {
 		}
 
 		switch metadata.TransactionState {
-		case api.TransactionStateNoTransaction:
+		case api.TransactionStateUnknown:
 			// transaction is not known, so the block must have been filtered
 			// => re-add the items to the queue and delete the pending transaction
 			return false, true, "", ierrors.Errorf("metadata of the pending transaction is no transaction, blockID: %s, txID: %s", pendingTx.BlockID, pendingTx.TransactionID)
@@ -941,8 +941,8 @@ func (f *Faucet) checkPendingTransactionState() {
 			// => do nothing
 			return false, false, fmt.Sprintf("transaction still pending, blockID: %s, txID: %s", pendingTx.BlockID, pendingTx.TransactionID), nil
 
-		case api.TransactionStateAccepted, api.TransactionStateConfirmed, api.TransactionStateFinalized:
-			// transaction was confirmed
+		case api.TransactionStateAccepted, api.TransactionStateCommitted, api.TransactionStateFinalized:
+			// transaction was accepted
 			// => delete the requests and the pending transaction
 			return true, false, fmt.Sprintf("transaction successful, blockID: %s, txID: %s", pendingTx.BlockID, pendingTx.TransactionID), nil
 
