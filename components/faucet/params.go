@@ -10,8 +10,8 @@ type ParametersFaucet struct {
 	BaseTokenAmount          uint64        `default:"1000000000" usage:"the amount of funds the requester receives"`
 	BaseTokenAmountSmall     uint64        `default:"100000000" usage:"the amount of funds the requester receives if the target address has more funds than the faucet amount and less than maximum"`
 	BaseTokenAmountMaxTarget uint64        `default:"5000000000" usage:"the maximum allowed amount of funds on the target address"`
-	ManaAmount               uint64        `default:"1000" usage:"the amount of mana the requester receives"`
-	ManaAmountMinFaucet      uint64        `default:"1000000" usage:"the minimum amount of mana the faucet needs to hold before mana payouts become active"`
+	ManaAmount               uint64        `default:"1000000" usage:"the amount of mana the requester receives"`
+	ManaAmountMinFaucet      uint64        `default:"1000000000" usage:"the minimum amount of mana the faucet needs to hold before mana payouts become active"`
 	TagMessage               string        `default:"FAUCET" usage:"the faucet transaction tag payload"`
 	BatchTimeout             time.Duration `default:"2s" usage:"the maximum duration for collecting faucet batches"`
 	BindAddress              string        `default:"localhost:8091" usage:"the bind address on which the faucet website can be accessed from"`
