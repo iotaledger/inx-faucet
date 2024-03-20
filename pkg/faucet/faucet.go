@@ -1,4 +1,3 @@
-//nolint:nosnakecase // grpc uses underscores
 package faucet
 
 import (
@@ -99,7 +98,7 @@ type InfoResponse struct {
 	Balance iotago.BaseToken `json:"balance"`
 	// The name of the token of the faucet.
 	TokenName string `json:"tokenName"`
-	// The Bech32 human readable part of the the faucet.
+	// The Bech32 human readable part of the faucet.
 	Bech32HRP iotago.NetworkPrefix `json:"bech32Hrp"`
 }
 
@@ -287,7 +286,6 @@ func New(
 	address iotago.Address,
 	addressSigner iotago.AddressSigner,
 	opts ...Option) *Faucet {
-
 	options := &Options{}
 	options.apply(defaultOptions...)
 	options.apply(opts...)
@@ -390,19 +388,16 @@ func (f *Faucet) Info() (*InfoResponse, error) {
 
 // Enqueue adds a new faucet request to the queue.
 func (f *Faucet) Enqueue(bech32Addr string) (*EnqueueResponse, error) {
-
 	addr, err := f.parseBech32Address(bech32Addr)
 	if err != nil {
 		return nil, err
 	}
 
 	if !f.isNodeHealthyFunc() {
-		//nolint:stylecheck,revive // this error message is shown to the user
 		return nil, ierrors.Wrap(echo.ErrInternalServerError, "Faucet node is not synchronized/healthy. Please try again later!")
 	}
 
 	if exists := f.isAlreadyinQueue(bech32Addr); exists {
-		//nolint:stylecheck,revive // this error message is shown to the user
 		return nil, ierrors.Wrap(httpserver.ErrInvalidParameter, "Address is already in the queue.")
 	}
 
@@ -412,7 +407,6 @@ func (f *Faucet) Enqueue(bech32Addr string) (*EnqueueResponse, error) {
 		baseTokenAmount = f.opts.baseTokenAmountSmall
 
 		if balance >= f.opts.baseTokenAmountMaxTarget {
-			//nolint:stylecheck,revive // this error message is shown to the user
 			return nil, ierrors.Wrap(httpserver.ErrInvalidParameter, "You already have enough funds on your address.")
 		}
 	}
@@ -423,7 +417,6 @@ func (f *Faucet) Enqueue(bech32Addr string) (*EnqueueResponse, error) {
 	defer f.Unlock()
 
 	if baseTokenAmount > f.faucetBalance {
-		//nolint:stylecheck,revive // this error message is shown to the user
 		return nil, ierrors.Wrap(echo.ErrInternalServerError, "Faucet does not have enough funds to process your request. Please try again later!")
 	}
 
@@ -445,7 +438,7 @@ func (f *Faucet) Enqueue(bech32Addr string) (*EnqueueResponse, error) {
 
 	default:
 		// queue is full
-		//nolint:stylecheck,revive // this error message is shown to the user
+
 		return nil, ierrors.Wrap(echo.ErrInternalServerError, "Faucet queue is full. Please try again later!")
 	}
 }
@@ -465,13 +458,11 @@ func (f *Faucet) logSoftError(err error) {
 func (f *Faucet) parseBech32Address(bech32Addr string) (iotago.Address, error) {
 	hrp, bech32Address, err := iotago.ParseBech32(bech32Addr)
 	if err != nil {
-		//nolint:stylecheck,revive // this error message is shown to the user
 		return nil, ierrors.Wrap(httpserver.ErrInvalidParameter, "Invalid bech32 address provided!")
 	}
 
 	protocolParams := f.apiProvider.CommittedAPI().ProtocolParameters()
 	if hrp != protocolParams.Bech32HRP() {
-		//nolint:stylecheck,revive // this error message is shown to the user
 		return nil, ierrors.Wrapf(httpserver.ErrInvalidParameter, "Invalid bech32 address provided! Address does not start with \"%s\".", protocolParams.Bech32HRP())
 	}
 
@@ -878,7 +869,6 @@ func (f *Faucet) collectRequestsAndSendFaucetBlock(ctx context.Context) error {
 
 // RunFaucetLoop collects unspent outputs on the faucet address and batches the requests from the queue.
 func (f *Faucet) RunFaucetLoop(ctx context.Context) error {
-
 	// set initial faucet balance
 	if err := f.computeAndSetInitialFaucetBalance(); err != nil {
 		return CriticalError(ierrors.Errorf("reading faucet address balance failed: %s, error: %w", f.address.Bech32(f.apiProvider.CommittedAPI().ProtocolParameters().Bech32HRP()), err))
@@ -911,7 +901,7 @@ func (f *Faucet) checkPendingTransactionState() {
 	f.LogDebug("entering checkPendingTransactionState...")
 	defer f.LogDebug("leaving checkPendingTransactionState...")
 
-	// nolint: nonamedreturns // easier to read in this case
+	//nolint:nonamedreturns // easier to read in this case
 	checkPendingTransaction := func(pendingTx *pendingTransaction) (clearPending bool, readdPending bool, logMessage string, softError error) {
 		if pendingTx == nil {
 			// no pending transaction so there is no need for additional checks
@@ -1008,7 +998,7 @@ func (f *Faucet) ApplyAcceptedTransaction(createdOutputs map[iotago.OutputID]str
 	f.LogDebug("entering ApplyAcceptedTransaction...")
 	defer f.LogDebug("leaving ApplyAcceptedTransaction...")
 
-	// nolint: nonamedreturns // easier to read in this case
+	//nolint:nonamedreturns // easier to read in this case
 	checkPendingTransaction := func(pendingTx *pendingTransaction) (clearPending bool, readdPending bool, logMessage string) {
 		if pendingTx == nil {
 			// no pending transaction so there is no need for additional checks

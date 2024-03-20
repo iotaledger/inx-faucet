@@ -54,7 +54,6 @@ func addFaucetOutputToQueue(c echo.Context) (*faucet.EnqueueResponse, error) {
 }
 
 func setupRoutes(e *echo.Echo) {
-
 	e.Pre(enforceMaxOneDotPerURL)
 
 	e.Group("/*").Use(frontendMiddleware())
