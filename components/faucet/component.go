@@ -58,7 +58,6 @@ type dependencies struct {
 }
 
 func provide(c *dig.Container) error {
-
 	// we use a restricted address for the faucet, so we don't need to filter indexer requests.
 	// we only allow to receive mana, the rest is blocked.
 	faucetAddressRestricted, faucetSigner, err := getRestrictedFaucetAddressAndSigner()
@@ -97,7 +96,6 @@ func provide(c *dig.Container) error {
 	}
 
 	if err := c.Provide(func(deps faucetDeps) (*faucet.Faucet, error) {
-
 		fetchTransactionMetadata := func(transactionID iotago.TransactionID) (*api.TransactionMetadataResponse, error) {
 			ctx, cancel := context.WithTimeout(Component.Daemon().ContextStopped(), 5*time.Second)
 			defer cancel()
@@ -205,7 +203,7 @@ func provide(c *dig.Container) error {
 						continue
 					}
 
-					lastAcceptedBlockSlot := iotago.SlotIndex(deps.NodeBridge.NodeStatus().LastAcceptedBlockSlot)
+					lastAcceptedBlockSlot := iotago.SlotIndex(deps.NodeBridge.NodeStatus().GetLastAcceptedBlockSlot())
 					if output.UnlockConditionSet().HasTimelockUntil(lastAcceptedBlockSlot) {
 						// ignore timelocked outputs for balance calculation
 						continue
@@ -240,7 +238,7 @@ func provide(c *dig.Container) error {
 		}
 
 		getLatestSlot := func() iotago.SlotIndex {
-			return iotago.SlotIndex(deps.NodeBridge.NodeStatus().LastAcceptedBlockSlot)
+			return iotago.SlotIndex(deps.NodeBridge.NodeStatus().GetLastAcceptedBlockSlot())
 		}
 
 		submitTransactionPayload := func(ctx context.Context, builder *builder.TransactionBuilder, storedManaOutputIndex int, numPoWWorkers ...int) (iotago.ApplicationPayload, iotago.BlockID, error) {
@@ -269,7 +267,7 @@ func provide(c *dig.Container) error {
 			faucetAddressRestricted,
 			faucetSigner,
 			faucet.WithLogger(Component.Logger),
-			faucet.WithTokenName(deps.NodeBridge.NodeConfig().BaseToken.Name),
+			faucet.WithTokenName(deps.NodeBridge.NodeConfig().GetBaseToken().GetName()),
 			faucet.WithBaseTokenAmount(iotago.BaseToken(ParamsFaucet.BaseTokenAmount)),
 			faucet.WithBaseTokenAmountSmall(iotago.BaseToken(ParamsFaucet.BaseTokenAmountSmall)),
 			faucet.WithBaseTokenAmountMaxTarget(iotago.BaseToken(ParamsFaucet.BaseTokenAmountMaxTarget)),
@@ -291,7 +289,6 @@ func provide(c *dig.Container) error {
 }
 
 func run() error {
-
 	// create a background worker that handles the accepted transactions
 	if err := Component.Daemon().BackgroundWorker("Faucet[ListenToAcceptedTransactions]", func(ctx context.Context) {
 		if err := deps.NodeBridge.ListenToAcceptedTransactions(ctx, func(tx *nodebridge.AcceptedTransaction) error {
@@ -349,11 +346,11 @@ func run() error {
 func loadEd25519PrivateKeysFromEnvironment(name string) ([]ed25519.PrivateKey, error) {
 	keys, exists := os.LookupEnv(name)
 	if !exists {
-		return nil, fmt.Errorf("environment variable '%s' not set", name)
+		return nil, ierrors.Errorf("environment variable '%s' not set", name)
 	}
 
 	if len(keys) == 0 {
-		return nil, fmt.Errorf("environment variable '%s' not set", name)
+		return nil, ierrors.Errorf("environment variable '%s' not set", name)
 	}
 
 	privateKeysSplitted := strings.Split(keys, ",")
@@ -361,8 +358,7 @@ func loadEd25519PrivateKeysFromEnvironment(name string) ([]ed25519.PrivateKey, e
 	for i, key := range privateKeysSplitted {
 		privateKey, err := crypto.ParseEd25519PrivateKeyFromString(key)
 		if err != nil {
-			return nil, fmt.Errorf("environment variable '%s' contains an invalid private key '%s'", name, key)
-
+			return nil, ierrors.Errorf("environment variable '%s' contains an invalid private key '%s'", name, key)
 		}
 		privateKeys[i] = privateKey
 	}

@@ -1,4 +1,3 @@
-// nolint
 package main
 
 import (
@@ -10,6 +9,7 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/iotaledger/hive.go/ierrors"
 	"github.com/iotaledger/inx-faucet/pkg/faucet"
 	iotago "github.com/iotaledger/iota.go/v4"
 	"github.com/iotaledger/iota.go/v4/tpkg"
@@ -22,8 +22,7 @@ const (
 )
 
 func main() {
-
-	for i := 0; i < 1000; i++ {
+	for range 1000 {
 		pubKey := ed25519.PublicKey(tpkg.RandBytes(32))
 
 		addr := iotago.Ed25519AddressFromPubKey(pubKey)
@@ -32,10 +31,14 @@ func main() {
 		fmt.Println("Your ed25519 address: ", hex.EncodeToString(addr[:]))
 		fmt.Println("Your bech32 address: ", addr.Bech32(network))
 
-		jsonValue, _ := json.Marshal(&faucet.EnqueueRequest{
+		jsonValue, err := json.Marshal(&faucet.EnqueueRequest{
 			Address: addr.Bech32(network),
 		})
+		if err != nil {
+			panic(ierrors.Errorf("unable to marshal request: %w", err))
+		}
 
+		//nolint:noctx // it's just a test anyway
 		resp, err := http.Post(url, "application/json", bytes.NewBuffer(jsonValue))
 		if err != nil {
 			panic(err)
@@ -43,21 +46,20 @@ func main() {
 		defer resp.Body.Close()
 
 		if resp.StatusCode != http.StatusAccepted {
-			panic(fmt.Errorf("http status code: %d", resp.StatusCode))
+			panic(ierrors.Errorf("http status code: %d", resp.StatusCode))
 		}
 
 		responseBytes, err := io.ReadAll(resp.Body)
 		if err != nil {
-			panic(fmt.Errorf("unable to read response: %w", err))
+			panic(ierrors.Errorf("unable to read response: %w", err))
 		}
 
 		res := faucet.EnqueueResponse{}
 		err = json.Unmarshal(responseBytes, &res)
 		if err != nil {
-			panic(fmt.Errorf("unable to unmarshal response: %w", err))
+			panic(ierrors.Errorf("unable to unmarshal response: %w", err))
 		}
 
 		println(fmt.Sprintf("WaitingRequests: %d", res.WaitingRequests))
-
 	}
 }

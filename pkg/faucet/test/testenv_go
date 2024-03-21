@@ -219,7 +219,7 @@ func NewFaucetTestEnv(t *testing.T,
 
 	storeMessageFunc := func(ctx context.Context, block *iotago.Block) (iotago.BlockID, error) {
 		if block.ProtocolVersion != te.ProtocolParameters().Version {
-			return iotago.BlockID{}, fmt.Errorf("block has invalid protocol version %d instead of %d", block.ProtocolVersion, te.ProtocolParameters().Version)
+			return iotago.BlockID{}, ierrors.Errorf("block has invalid protocol version %d instead of %d", block.ProtocolVersion, te.ProtocolParameters().Version)
 		}
 
 		if len(block.Parents) == 0 {
@@ -237,7 +237,7 @@ func NewFaucetTestEnv(t *testing.T,
 
 		score := pow.Score(blk.Data())
 		if score < float64(MinPoWScore) {
-			return iotago.BlockID{}, fmt.Errorf("block has insufficient PoW score %0.2f", score)
+			return iotago.BlockID{}, ierrors.Errorf("block has insufficient PoW score %0.2f", score)
 		}
 
 		cmi := te.SyncManager().ConfirmedMilestoneIndex()
